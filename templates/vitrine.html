@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ fornecedor.nome }} — Catálogo Nexus</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=nexus-v2">
+  <style>
+    body { padding: 4rem 0; overflow-x: hidden; }
+    .vitrine-header { text-align: center; margin-bottom: 5rem; animation: fadeInUp 0.8s ease-out; }
+    
+    .vitrine-header .icon-badge {
+      width: 80px; height: 80px; border-radius: 24px;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 2.2rem; background: var(--accent-g); color: var(--accent);
+      border: 1px solid rgba(255,255,255,0.06); margin-bottom: 1.5rem;
+    }
+    .vitrine-header h1 { font-size: 3rem; margin-bottom: 1rem; }
+    .vitrine-header p { color: var(--muted); font-size: 1.1rem; }
+
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 2rem; position: relative; z-index: 1; }
+    
+    .grid-produtos {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 2rem;
+      animation: fadeInUp 1s ease-out;
+    }
+
+    .produto-card {
+      background: rgba(255, 255, 255, 0.01); border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 32px; padding: 2.5rem; position: relative;
+      transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+      backdrop-filter: blur(10px); display: flex; flex-direction: column;
+    }
+    .produto-card:hover { 
+      transform: translateY(-8px); border-color: rgba(255,255,255,0.15); 
+      background: rgba(255,255,255,0.03); box-shadow: 0 30px 60px -15px rgba(0,0,0,0.7);
+    }
+
+    .badge-esgotado {
+      position: absolute; top: 20px; right: 20px; background: var(--red);
+      color: #fff; font-size: 0.7rem; padding: 6px 12px; border-radius: 10px; font-weight: 800; z-index: 2;
+    }
+    
+    .img-wrap {
+      width: 100%; height: 200px; border-radius: 20px; margin-bottom: 20px; 
+      overflow: hidden; background: #fff; border: 1px solid var(--border);
+    }
+    .img-placeholder {
+      width: 100%; height: 200px; border-radius: 20px; margin-bottom: 20px; 
+      background: rgba(255,255,255,0.02); display: flex; align-items: center; 
+      justify-content: center; border: 1px dashed var(--border);
+    }
+
+    .cat-tag { font-size: 0.75rem; color: var(--accent); text-transform: uppercase; font-weight: 800; margin-bottom: 8px; letter-spacing: 0.05em; }
+    .p-nome { font-weight: 700; font-size: 1.4rem; margin-bottom: 8px; font-family: var(--font-heading); }
+    .p-desc { font-size: 0.95rem; color: var(--muted); margin-bottom: 2rem; min-height: 50px; line-height: 1.5; }
+    .p-footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: auto; }
+    .p-preco { font-size: 1.75rem; font-weight: 800; color: #fff; }
+    .p-qtd { font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+    
+    .esgotado-card .p-nome, .esgotado-card .p-preco { color: var(--muted); }
+    
+    .cta-container { margin-top: 6rem; text-align: center; animation: fadeInUp 1.2s ease-out; }
+    .btn-nexus {
+      display: inline-flex; align-items: center; gap: 12px; padding: 1.5rem 3rem;
+      background: var(--accent); color: #fff; font-weight: 800; font-size: 1.1rem;
+      border-radius: 24px; text-decoration: none; transition: all 0.3s;
+      box-shadow: 0 15px 40px -10px var(--accent);
+    }
+    .btn-nexus:hover { transform: translateY(-4px); box-shadow: 0 25px 50px -10px var(--accent); color: #fff; }
+  </style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="glow-orb" style="width: 500px; height: 500px; background: var(--accent); top: -100px; left: 50%; transform: translateX(-50%); opacity: 0.1;"></div>
+
+<div class="container">
+  <header class="vitrine-header">
+    <div class="icon-badge"><i class="fas fa-store"></i></div>
+    <h1 class="text-gradient">{{ fornecedor.nome }}</h1>
+    <p>
+      {% if fornecedor.endereco %}<i class="fas fa-location-dot" style="margin-right: 6px;"></i> {{ fornecedor.endereco }}{% endif %}
+      {% if fornecedor.telefone %} &bull; <i class="fas fa-phone" style="margin-left: 6px; margin-right: 6px;"></i> {{ fornecedor.telefone }}{% endif %}
+    </p>
+  </header>
+
+  <h2 style="margin-bottom: 3rem; font-family: var(--font-heading); font-size: 1.75rem; letter-spacing: -0.03em;">
+    <i class="fas fa-boxes-stacked" style="color:var(--accent); margin-right: 12px;"></i> Catálogo Profissional
+  </h2>
+
+  {% if not produtos %}
+    <div class="card" style="text-align: center; padding: 4rem; color: var(--muted);">
+      <i class="fas fa-box-open" style="font-size: 3rem; margin-bottom: 1.5rem; opacity: 0.2;"></i>
+      <p>Nenhum produto disponível no catálogo no momento.</p>
+    </div>
+  {% else %}
+    <div class="grid-produtos">
+      {% for p in produtos %}
+        {% set esgotado = p.quantidade <= 0 %}
+        <div class="produto-card {% if esgotado %}esgotado-card{% endif %}">
+          {% if esgotado %}<div class="badge-esgotado">ESGOTADO</div>{% endif %}
+          
+          {% if p.imagem %}
+            <div class="img-wrap">
+              <img src="/static/uploads/{{ p.imagem }}" alt="{{ p.nome }}" style="width: 100%; height: 100%; object-fit: contain;">
+            </div>
+          {% else %}
+            <div class="img-placeholder">
+              <i class="fas fa-image" style="font-size: 3rem; color: var(--border);"></i>
+            </div>
+          {% endif %}
+
+          <div class="cat-tag">{{ p.categoria_nome or 'Geral' }}</div>
+          <div class="p-nome">{{ p.nome }}</div>
+          <div class="p-desc">{{ p.descricao or 'Sem especificações adicionais para este item.' }}</div>
+          <div class="p-footer">
+            <div class="p-preco">
+              R$ {{ "%.2f"|format(p.preco)|replace('.', ',') }}
+            </div>
+            {% if not esgotado %}<div class="p-qtd">{{ p.quantidade }} un.</div>{% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="cta-container">
+    <a href="/login" class="btn-nexus">
+      Acessar Sistema para Comprar <i class="fas fa-arrow-right"></i>
+    </a>
+  </div>
+</div>
+
+</body>
+</html>

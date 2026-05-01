@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Definir Nova Chave</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="static/app.css?v=nexus-v2">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root { --accent: #6366f1; --accent-glow: rgba(99, 102, 241, 0.15); --bg: #030305; }
+    body { background: var(--bg); color: #fff; font-family: 'Inter', sans-serif; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem 1rem; overflow-x: hidden; }
+    .bg-portal { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+    .bg-grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 50px 50px; mask-image: radial-gradient(circle at 50% 50%, black, transparent 80%); }
+    .glow-orb { position: absolute; border-radius: 50%; filter: blur(140px); background: var(--accent); opacity: 0.12; animation: float 15s infinite alternate ease-in-out; }
+    @keyframes float { 0% { transform: translate(-10%, -10%) scale(1); } 100% { transform: translate(10%, 10%) scale(1.2); } }
+    .card-nexus { position: relative; z-index: 10; width: 100%; max-width: 450px; background: rgba(255, 255, 255, 0.01); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 40px; padding: 4rem 3rem; backdrop-filter: blur(40px); box-shadow: 0 60px 120px -30px rgba(0,0,0,0.9); animation: fadeInUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .header-portal { text-align: center; margin-bottom: 3.5rem; }
+    h1 { font-family: 'Space Grotesk', sans-serif; font-size: 2.25rem; font-weight: 800; margin: 0; letter-spacing: -0.04em; }
+    .subtitle { color: #808090; font-size: 1rem; margin-top: 1rem; }
+    .field { display: flex; flex-direction: column; gap: 10px; margin-bottom: 2rem; }
+    label { font-size: 0.7rem; font-weight: 800; color: #606070; text-transform: uppercase; letter-spacing: 0.12em; }
+    input { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; height: 58px; padding: 0 1.25rem; color: #fff; font-size: 1.05rem; transition: 0.3s; }
+    input:focus { outline: none; border-color: var(--accent); background: rgba(255, 255, 255, 0.05); box-shadow: 0 0 0 4px var(--accent-glow); }
+    .btn-submit { width: 100%; height: 62px; border: none; border-radius: 20px; background: var(--accent); color: #fff; font-size: 1.1rem; font-weight: 800; cursor: pointer; transition: 0.4s; display: flex; align-items: center; justify-content: center; gap: 12px; }
+    .status-msg { display: none; padding: 1.25rem; border-radius: 18px; margin-top: 2rem; font-weight: 600; text-align: center; font-size: 0.95rem; }
+    .status-msg.error { background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.15); color: #f43f5e; }
+    .status-msg.success { background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.15); color: #10b981; }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body>
+
+<div class="bg-portal">
+  <div class="bg-grid"></div>
+  <div class="glow-orb" style="width: 500px; height: 500px; top: -100px; right: -50px;"></div>
+</div>
+
+<div class="card-nexus">
+  <div class="header-portal">
+    <h1>Nova Senha</h1>
+    <p class="subtitle">Defina sua nova chave de acesso criptografada para a rede Nexus.</p>
+  </div>
+
+  <form id="formNovaSenha">
+    <div class="field">
+      <label>Nova Senha</label>
+      <input type="password" id="senha" placeholder="Mínimo 6 caracteres" minlength="6" required autofocus>
+    </div>
+    
+    <button type="submit" class="btn-submit" id="btnSubmit">
+      <span>Atualizar Chave</span>
+      <i class="fas fa-check-circle"></i>
+    </button>
+
+    <div id="statusMsg" class="status-msg"></div>
+  </form>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://gtctfqphvsczeenpysco.supabase.co";
+  const SUPABASE_KEY = 'REMOVED';
+  // Supabase frontend init removed
+
+  let recoveryReady = false;
+  let recoveryError = null;
+
+  async function loadRecoverySession() {
+    const { data, error } = await supabaseClient.auth.getSessionFromUrl({ storeSession: true });
+    if (error) {
+      recoveryError = error.message || 'Não foi possível recuperar a sessão de recuperação.';
+      console.error('Erro ao recuperar sessão:', error.message);
+      return null;
+    }
+    return data?.session;
+  }
+
+  window.addEventListener('DOMContentLoaded', async () => {
+    const session = await loadRecoverySession();
+    recoveryReady = !!session;
+    if (!recoveryReady) {
+      const msg = document.getElementById('statusMsg');
+      msg.textContent = recoveryError || 'Acesse o link enviado por e-mail para redefinir sua senha.';
+      msg.className = 'status-msg error';
+      msg.style.display = 'block';
+    }
+  });
+
+  document.getElementById('formNovaSenha').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('btnSubmit');
+    const msg = document.getElementById('statusMsg');
+    const novaSenha = document.getElementById('senha').value;
+
+    msg.style.display = 'none';
+    btn.disabled = true;
+
+    if (!recoveryReady) {
+      msg.textContent = recoveryError || 'Link inválido ou expirado. Solicite um novo e-mail de recuperação.';
+      msg.className = 'status-msg error';
+      msg.style.display = 'block';
+      btn.disabled = false;
+      return;
+    }
+
+    if (novaSenha.length < 6) {
+      msg.textContent = 'A senha deve ter no mínimo 6 caracteres.';
+      msg.className = 'status-msg error';
+      msg.style.display = 'block';
+      btn.disabled = false;
+      return;
+    }
+
+    try {
+      const { error } = await supabaseClient.auth.updateUser({ password: novaSenha });
+      if (error) throw error;
+
+      msg.textContent = 'Senha atualizada com sucesso! Você será redirecionado...';
+      msg.className = 'status-msg success';
+      msg.style.display = 'block';
+      
+      setTimeout(() => { window.location.href = 'login.html'; }, 3000);
+      
+    } catch (ex) {
+      msg.textContent = 'Erro: ' + (ex.message || 'Tente novamente.');
+      msg.className = 'status-msg error';
+      msg.style.display = 'block';
+      btn.disabled = false;
+    }
+  });
+</script>
+
+</body>
+</html>

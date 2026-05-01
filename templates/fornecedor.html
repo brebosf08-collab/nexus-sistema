@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ empresa.nome }} — Centro de Comando Nexus</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=nexus-v2">
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="glow-orb" style="width: 600px; height: 600px; background: var(--accent); top: -200px; right: -100px; opacity: 0.1;"></div>
+
+<div class="top-bar">
+  <h1>
+    <i class="fas fa-tower-broadcast" style="color:var(--accent); margin-right: 12px; font-size: 0.9em;"></i>
+    <span class="text-gradient">{{ empresa.nome }}</span>
+  </h1>
+  <div class="info">
+    <span style="font-weight: 700; font-size: 0.9rem; color: var(--muted);"><i class="fas fa-user-shield" style="margin-right: 8px;"></i> {{ usuario }}</span>
+    <button class="btn-logout" onclick="logout()"><i class="fas fa-power-off"></i> Encerrar Sessão</button>
+  </div>
+</div>
+
+<div class="mobile-nav">
+  <button class="nav-item active" data-sec="dashboard" onclick="navTo('dashboard')"><i class="fas fa-chart-pie"></i></button>
+  <button class="nav-item" data-sec="estoque" onclick="navTo('estoque')"><i class="fas fa-box"></i></button>
+  <button class="nav-item" data-sec="pedidos" onclick="navTo('pedidos')"><i class="fas fa-receipt"></i></button>
+  <button class="nav-item" data-sec="vendedores" onclick="navTo('vendedores')"><i class="fas fa-users"></i></button>
+</div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="nav-item active" data-sec="dashboard" onclick="navTo('dashboard')"><i class="fas fa-chart-pie"></i> <span>Dashboard Global</span></div>
+    <div class="nav-item" data-sec="estoque" onclick="navTo('estoque')"><i class="fas fa-box"></i> <span>Inventário</span></div>
+    <div class="nav-item" data-sec="categorias" onclick="navTo('categorias')"><i class="fas fa-tags"></i> <span>Categorias</span></div>
+    <div class="nav-item" data-sec="pedidos" onclick="navTo('pedidos')"><i class="fas fa-file-invoice-dollar"></i> <span>Gestão de Pedidos</span></div>
+    <div class="nav-item" data-sec="vendedores" onclick="navTo('vendedores')"><i class="fas fa-users-gear"></i> <span>Time Comercial</span></div>
+    <div class="nav-item" data-sec="reunioes" onclick="navTo('reunioes')"><i class="fas fa-calendar-check"></i> <span>Agendas</span></div>
+    <div class="nav-item" data-sec="contatos" onclick="navTo('contatos')"><i class="fas fa-address-book"></i> <span>Contatos</span></div>
+    <div class="nav-item" data-sec="historico" onclick="navTo('historico')"><i class="fas fa-clock-rotate-left"></i> <span>Auditoria/Log</span></div>
+  </aside>
+
+  <main class="main-content">
+    <!-- DASHBOARD -->
+    <div id="sec-dashboard" class="page-section active">
+      <h2 class="page-title"><i class="fas fa-grid-2"></i> Painel de Controle</h2>
+      
+      <div class="card glass" style="margin-bottom: 3rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <h3 style="margin-bottom: 0.5rem;"><i class="fas fa-share-nodes" style="color:var(--accent)"></i> Ativar Ecossistema</h3>
+            <p style="color: var(--muted); margin: 0; max-width: 500px;">Seu catálogo profissional está online. Compartilhe o link com clientes e representantes.</p>
+          </div>
+          <div class="badge-status" style="background: var(--green-g); color: var(--green); padding: 8px 16px; border-radius: 12px; font-size: 0.7rem; font-weight: 800;">
+            <i class="fas fa-circle" style="font-size: 0.5rem; margin-right: 6px;"></i> OPERACIONAL
+          </div>
+        </div>
+        <div class="inline-form" style="margin-top: 2rem; background: rgba(255,255,255,0.02); padding: 1.5rem; border-radius: 20px; border: 1px solid var(--border);">
+          <input type="text" id="link-vitrine" value="http://127.0.0.1:5000/loja/{{ empresa.id }}" readonly style="background:transparent; border:none; color:var(--accent); font-weight: 700; flex:1; font-size: 1.1rem;">
+          <button class="btn btn-primary" onclick="copiarLinkVitrine()"><i class="fas fa-copy"></i> Copiar Link</button>
+          <a href="/loja/{{ empresa.id }}" target="_blank" class="btn btn-outline">Visualizar Vitrine</a>
+        </div>
+        <div id="msg-copy" style="color: var(--green); font-size: 0.85rem; margin-top: 15px; display: none; font-weight: 700;"><i class="fas fa-check-double"></i> Pronto! Link copiado para transferência.</div>
+      </div>
+      
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="label">Total em Produtos</div>
+          <div class="value" id="d-produtos">0</div>
+          <i class="fas fa-boxes"></i>
+        </div>
+        <div class="stat-card">
+          <div class="label">Avaliação de Estoque</div>
+          <div class="value" id="d-valor" style="color: var(--green);">R$ 0</div>
+          <i class="fas fa-money-bill-trend-up"></i>
+        </div>
+        <div class="stat-card">
+          <div class="label">Alertas de Reposição</div>
+          <div class="value" id="d-baixos" style="color: var(--amber);">0</div>
+          <i class="fas fa-triangle-exclamation"></i>
+        </div>
+        <div class="stat-card">
+          <div class="label">Vendas Registradas</div>
+          <div class="value" id="d-pedidos">0</div>
+          <i class="fas fa-receipt"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- OUTRAS SEÇÕES (ESTOQUE, PEDIDOS, ETC - MESMA LÓGICA DE IDS) -->
+    <!-- ESTOQUE -->
+    <div id="sec-estoque" class="page-section">
+      <h2 class="page-title"><i class="fas fa-boxes-stacked"></i> Inventário Estratégico</h2>
+      <div class="card">
+        <h3>Novo Ativo no Sistema</h3>
+        <form onsubmit="addProduto(event)" enctype="multipart/form-data">
+          <div class="form-grid">
+            <div class="field"><label>Nome do Produto</label><input name="nome" required placeholder="Ex: Produto Premium X"></div>
+            <div class="field"><label>Referência / SKU</label><input name="sku" placeholder="SKU-2026-ABC"></div>
+            <div class="field"><label>Categoria</label><select name="categoria_id" id="sel-cat-prod"><option value="">Selecione...</option></select></div>
+            <div class="field"><label>Nova Categoria</label><input id="new-cat-prod" placeholder="Ou digite uma nova"></div>
+            <div class="field"><label>Custo Unitário (R$)</label><input name="custo" type="number" step="0.01" required></div>
+            <div class="field"><label>Preço Final (R$)</label><input name="preco" type="number" step="0.01" required></div>
+            <div class="field"><label>Qtd Inicial</label><input name="quantidade" type="number" required></div>
+            <div class="field"><label>Alerta Mínimo</label><input name="minimo" type="number" required></div>
+            <div class="field full"><label>Descrição & Especificações</label><textarea name="descricao"></textarea></div>
+            <div class="field"><label>Mídia do Produto</label><input type="file" name="imagem" accept="image/*"></div>
+          </div>
+          <button type="submit" class="btn btn-primary" style="margin-top: 1.5rem;">Cadastrar Produto</button>
+        </form>
+        <div id="msg-prod" class="msg"></div>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>ID</th><th>Produto</th><th>Categoria</th><th>Custo</th><th>Venda</th><th>Estoque</th><th>Status</th><th>Ações</th></tr></thead>
+            <tbody id="tb-estoque"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- CATEGORIAS -->
+    <div id="sec-categorias" class="page-section">
+      <h2 class="page-title"><i class="fas fa-tags"></i> Estrutura de Categorias</h2>
+      <div class="card">
+        <div class="inline-form" style="max-width: 500px;">
+          <input id="inp-cat" placeholder="Nova Classificação..." class="field" style="margin-bottom:0">
+          <button class="btn btn-primary" onclick="addCategoria()">Adicionar</button>
+        </div>
+        <div id="msg-cat" class="msg"></div>
+        <div class="table-wrap" style="margin-top: 2rem;">
+          <table><thead><tr><th>ID</th><th>Nome da Categoria</th><th>Ações</th></tr></thead><tbody id="tb-categorias"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- PEDIDOS -->
+    <div id="sec-pedidos" class="page-section">
+      <h2 class="page-title"><i class="fas fa-file-invoice-dollar"></i> Inteligência de Pedidos</h2>
+      <div class="card">
+        <h3>Nova Transação Direta</h3>
+        <form onsubmit="criarPedido(event)">
+          <div class="form-grid">
+            <div class="field"><label>Cliente</label><input name="cliente" required></div>
+            <div class="field"><label>Data</label><input name="data_pedido" type="date" required></div>
+            <div class="field"><label>Vendedor</label><select name="vendedor_id" id="sel-vend-pedido"></select></div>
+            <div class="field"><label>Notas</label><input name="observacoes"></div>
+          </div>
+          <div style="background: rgba(255,255,255,0.02); padding: 1.5rem; border-radius: 20px; border: 1px solid var(--border); margin-top: 2rem;">
+            <div class="inline-form">
+              <select id="sel-prod-pedido" style="flex:2"></select>
+              <input id="qtd-pedido" type="number" min="1" value="1" style="width:80px">
+              <button type="button" class="btn btn-primary" onclick="addItemPedido()">+</button>
+            </div>
+            <div class="table-wrap" style="margin-top: 1rem; border:none; background:transparent;">
+              <table><thead><tr><th>Item</th><th>Qtd</th><th>Preço</th><th>Subtotal</th><th></th></tr></thead><tbody id="tb-itens-pedido"></tbody></table>
+            </div>
+            <div style="text-align: right; margin-top: 1rem; font-size: 1.5rem; font-weight: 800; color: var(--green);">Total: <span id="total-pedido">R$ 0,00</span></div>
+          </div>
+          <button type="submit" class="btn btn-primary" style="margin-top: 2rem; width: 100%;">Registrar Pedido</button>
+        </form>
+        <div id="msg-pedido" class="msg"></div>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Pedido</th><th>Cliente</th><th>Data</th><th>Total</th><th>Status</th><th>Ações</th></tr></thead>
+            <tbody id="tb-pedidos"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- VENDEDORES -->
+    <div id="sec-vendedores" class="page-section">
+      <h2 class="page-title"><i class="fas fa-users-gear"></i> Time Comercial</h2>
+      <div class="card">
+        <form onsubmit="addVendedor(event)">
+          <div class="form-grid">
+            <div class="field"><label>Nome</label><input name="nome" required></div>
+            <div class="field"><label>E-mail</label><input name="email" type="email"></div>
+            <div class="field"><label>Telefone</label><input name="telefone"></div>
+            <div class="field"><label>Comissão %</label><input name="comissao" type="number" step="0.1" value="0"></div>
+          </div>
+          <button type="submit" class="btn btn-primary" style="margin-top: 1.5rem;">Credenciar Vendedor</button>
+        </form>
+        <div id="msg-vend" class="msg"></div>
+      </div>
+      <div class="card">
+        <div class="table-wrap"><table><thead><tr><th>ID</th><th>Nome</th><th>E-mail</th><th>Comissão</th><th>Ações</th></tr></thead><tbody id="tb-vendedores"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- REUNIÕES -->
+    <div id="sec-reunioes" class="page-section">
+      <h2 class="page-title"><i class="fas fa-calendar-check"></i> Agendas</h2>
+      <div class="card">
+        <form onsubmit="addReuniao(event)">
+          <div class="form-grid">
+            <div class="field"><label>Título</label><input name="titulo" required></div>
+            <div class="field"><label>Data/Hora</label><input name="data_hora" type="datetime-local" required></div>
+            <div class="field"><label>Local</label><input name="local"></div>
+            <div class="field full"><label>Participantes</label><input name="participantes"></div>
+          </div>
+          <button type="submit" class="btn btn-primary" style="margin-top: 1.5rem;">Agendar Reunião</button>
+        </form>
+        <div id="msg-reuniao" class="msg"></div>
+      </div>
+      <div class="card">
+        <div class="table-wrap"><table><thead><tr><th>Título</th><th>Data</th><th>Status</th><th>Ações</th></tr></thead><tbody id="tb-reunioes"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- CONTATOS -->
+    <div id="sec-contatos" class="page-section">
+      <h2 class="page-title"><i class="fas fa-address-book"></i> Contatos</h2>
+      <div class="card">
+        <form onsubmit="addContato(event)">
+          <div class="form-grid">
+            <div class="field"><label>Nome</label><input name="nome" required></div>
+            <div class="field"><label>Documento</label><input name="documento"></div>
+            <div class="field"><label>E-mail</label><input name="email" type="email"></div>
+            <div class="field"><label>Telefone</label><input name="telefone"></div>
+            <div class="field"><label>Localidade</label><input name="endereco"></div>
+            <div class="field"><label>Tipo</label><select name="tipo"><option value="cliente">Cliente</option><option value="fornecedor">Fornecedor</option></select></div>
+          </div>
+          <button type="submit" class="btn btn-primary" style="margin-top: 1.5rem;">Adicionar Contato</button>
+        </form>
+        <div id="msg-contato" class="msg"></div>
+      </div>
+      <div class="card">
+        <div class="table-wrap"><table><thead><tr><th>Nome</th><th>E-mail</th><th>Tipo</th><th>Ações</th></tr></thead><tbody id="tb-contatos"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- HISTÓRICO -->
+    <div id="sec-historico" class="page-section">
+      <h2 class="page-title"><i class="fas fa-clock-rotate-left"></i> Auditoria</h2>
+      <div class="card">
+        <div class="table-wrap"><table><thead><tr><th>Produto</th><th>Tipo</th><th>Qtd</th><th>Data</th><th>Obs</th></tr></thead><tbody id="tb-historico"></tbody></table></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script src="{{ url_for('static', filename='app.js') }}?v=nexus-v2"></script>
+<script>
+  function copiarLinkVitrine() {
+    var copyText = document.getElementById("link-vitrine");
+    copyText.select();
+    copyText.setSelectionRange(0, 99999);
+    navigator.clipboard.writeText(copyText.value);
+    document.getElementById("msg-copy").style.display = "block";
+    setTimeout(() => document.getElementById("msg-copy").style.display = "none", 3000);
+  }
+</script>
+</body>
+</html>

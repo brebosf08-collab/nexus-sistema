@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Credenciamento Operacional</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="./static/app.css?v=nexus-v2">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --accent: #6366f1;
+      --accent-glow: rgba(99, 102, 241, 0.15);
+      --bg: #030305;
+    }
+    body { background: var(--bg); color: #fff; font-family: 'Inter', sans-serif; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem 1rem; }
+    .bg-portal { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+    .bg-grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 50px 50px; mask-image: radial-gradient(circle at 50% 50%, black, transparent 80%); }
+    .glow-orb { position: absolute; border-radius: 50%; filter: blur(140px); background: var(--accent); opacity: 0.12; animation: float 15s infinite alternate ease-in-out; }
+    @keyframes float { 0% { transform: translate(-10%, -10%) scale(1); } 100% { transform: translate(10%, 10%) scale(1.2); } }
+    .card-nexus { position: relative; z-index: 10; width: 100%; max-width: 680px; background: rgba(255, 255, 255, 0.01); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 48px; padding: 4rem; backdrop-filter: blur(40px); box-shadow: 0 60px 120px -30px rgba(0,0,0,0.9); animation: fadeInUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .header-portal { text-align: center; margin-bottom: 3.5rem; }
+    .badge-type { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 14px; background: var(--accent-glow); color: var(--accent); font-size: 0.75rem; font-weight: 800; text-transform: uppercase; margin-bottom: 1.5rem; border: 1px solid rgba(255,255,255,0.04); }
+    h1 { font-family: 'Space Grotesk', sans-serif; font-size: 2.5rem; font-weight: 800; margin: 0; letter-spacing: -0.04em; }
+    .subtitle { color: #808090; font-size: 1.1rem; margin-top: 0.75rem; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2.5rem; }
+    @media (max-width: 580px) { .form-grid { grid-template-columns: 1fr; } .card-nexus { padding: 3rem 2rem; } }
+    .field { display: flex; flex-direction: column; gap: 10px; }
+    .full { grid-column: span 2; }
+    @media (max-width: 580px) { .full { grid-column: span 1; } }
+    label { font-size: 0.7rem; font-weight: 800; color: #606070; text-transform: uppercase; letter-spacing: 0.12em; }
+    input { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 18px; height: 58px; padding: 0 1.25rem; color: #fff; font-size: 1rem; transition: 0.3s; }
+    input:focus { outline: none; border-color: var(--accent); background: rgba(255, 255, 255, 0.05); box-shadow: 0 0 0 4px var(--accent-glow); }
+    .input-wrapper { position: relative; display: flex; align-items: center; }
+    .input-wrapper input { width: 100%; padding-right: 3.5rem; }
+    .btn-toggle { position: absolute; right: 10px; height: 40px; width: 40px; background: transparent; border: none; color: #606070; cursor: pointer; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; }
+    .btn-submit { width: 100%; height: 68px; border: none; border-radius: 22px; background: var(--accent); color: #fff; font-size: 1.15rem; font-weight: 800; cursor: pointer; transition: 0.4s; display: flex; align-items: center; justify-content: center; gap: 12px; }
+    .btn-submit:hover { transform: translateY(-4px); box-shadow: 0 30px 60px -10px var(--accent-glow); }
+    .footer-portal { text-align: center; margin-top: 2.5rem; color: #606070; font-size: 0.9rem; }
+    .footer-portal a { color: #fff; font-weight: 700; text-decoration: none; border-bottom: 2px solid var(--accent); }
+    .error-msg { display: none; background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.15); color: #f43f5e; padding: 1.25rem; border-radius: 18px; margin-top: 1.5rem; font-weight: 600; text-align: center; }
+    
+    /* Força da Senha */
+    .strength-meter { height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; margin-top: 10px; overflow: hidden; position: relative; }
+    .strength-bar { height: 100%; width: 0%; transition: 0.4s; }
+    .strength-text { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; margin-top: 5px; color: #606070; letter-spacing: 0.05em; }
+
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body>
+
+<div class="bg-portal">
+  <div class="bg-grid"></div>
+  <div class="glow-orb" style="width: 600px; height: 600px; top: -200px; right: -100px;"></div>
+</div>
+
+<div class="card-nexus">
+  <div class="header-portal">
+    <div class="badge-type" id="badgeType">
+      <i class="fas fa-tower-broadcast" id="badgeIcon"></i>
+      <span id="badgeLabel">Carregando...</span>
+    </div>
+    <h1>Credenciamento</h1>
+    <p class="subtitle">Nexus Network — Operações em Tempo Real</p>
+  </div>
+
+  <form id="formCadastro" autocomplete="on" novalidate>
+    <div class="form-grid">
+      <div class="field full">
+        <label>Razão Social / Nome</label>
+        <input type="text" name="nome_empresa" placeholder="ex: Nexus Corp" required autofocus>
+      </div>
+      <div class="field">
+        <label>Documento (Opcional)</label>
+        <input type="text" name="documento" placeholder="CPF ou CNPJ">
+      </div>
+      <div class="field">
+        <label>Telefone (Opcional)</label>
+        <input type="text" name="telefone" placeholder="(00) 00000-0000" autocomplete="tel">
+      </div>
+      <div class="field full">
+        <label>E-mail Corporativo</label>
+        <input type="email" name="email" placeholder="acesso@nexus.com" required>
+      </div>
+      <div class="field full">
+        <label>Chave de Acesso</label>
+        <div class="input-wrapper">
+          <input type="password" id="senha" name="senha" placeholder="Mínimo 6 caracteres" minlength="6" required autocomplete="new-password" oninput="checkStrength(this.value)">
+          <button type="button" class="btn-toggle" id="toggleSenha" aria-label="Mostrar/ocultar senha">
+            <i class="fas fa-eye"></i>
+          </button>
+        </div>
+        <div class="strength-meter"><div id="sBar" class="strength-bar"></div></div>
+        <div id="sText" class="strength-text">Digite sua senha</div>
+      </div>
+    </div>
+    
+    <button type="submit" class="btn-submit" id="btnSubmit">
+      <span>Finalizar Registro</span>
+      <i class="fas fa-chevron-right"></i>
+    </button>
+
+    <div id="errorMsg" class="error-msg"></div>
+  </form>
+
+  <div class="footer-portal">
+    Já possui acesso? <a href="login.html">Fazer Login</a>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://gtctfqphvsczeenpysco.supabase.co";
+  const SUPABASE_KEY = 'REMOVED';
+  // Supabase frontend init removed
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const tipo = urlParams.get('tipo') || 'fornecedor';
+  
+  if (tipo === 'cliente') {
+    document.documentElement.style.setProperty('--accent', '#10b981');
+    document.documentElement.style.setProperty('--accent-glow', 'rgba(16, 185, 129, 0.15)');
+    document.getElementById('badgeLabel').textContent = 'Módulo Cliente';
+    document.getElementById('badgeIcon').className = 'fas fa-user-shield';
+  } else {
+    document.getElementById('badgeLabel').textContent = 'Módulo Fornecedor';
+  }
+
+  // Toggle senha (acessível)
+  const senhaInput = document.getElementById('senha');
+  const toggleBtn = document.getElementById('toggleSenha');
+  toggleBtn.addEventListener('click', () => {
+    if (senhaInput.type === 'password') {
+      senhaInput.type = 'text';
+      toggleBtn.querySelector('i').className = 'fas fa-eye-slash';
+    } else {
+      senhaInput.type = 'password';
+      toggleBtn.querySelector('i').className = 'fas fa-eye';
+    }
+    senhaInput.focus();
+  });
+  toggleBtn.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleBtn.click();
+    }
+  });
+
+  document.getElementById('formCadastro').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('btnSubmit');
+    const err = document.getElementById('errorMsg');
+    err.style.display = 'none';
+    btn.disabled = true;
+    btn.querySelector('span').textContent = 'Sincronizando...';
+
+    const fd = new FormData(e.target);
+    const data = Object.fromEntries(fd);
+
+    if (!data.nome_empresa || !data.email || !data.senha) {
+      err.textContent = 'Preencha todos os campos obrigatórios.';
+      err.style.display = 'block';
+      btn.disabled = false;
+      btn.querySelector('span').textContent = 'Finalizar Registro';
+      return;
+    }
+    if (data.senha.length < 6) {
+      err.textContent = 'A senha deve ter no mínimo 6 caracteres.';
+      err.style.display = 'block';
+      btn.disabled = false;
+      btn.querySelector('span').textContent = 'Finalizar Registro';
+      return;
+    }
+
+    try {
+      let result;
+      const API_BASE = window.location.protocol === 'file:' ? 'http://127.0.0.1:8080' : '';
+      try {
+          const res = await fetch(`${API_BASE}/api/registrar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              nome_empresa: data.nome_empresa,
+              documento: data.documento,
+              tipo: tipo,
+              email: data.email,
+              senha: data.senha,
+              telefone: data.telefone
+            })
+          });
+          result = await res.json();
+          if (!res.ok || !result.sucesso) throw new Error(result.mensagem || 'Erro no servidor.');
+      } catch(e) {
+          // Fallback se o servidor Flask estiver offline mas o Supabase funcionar (Opcional)
+          console.error("Erro no fetch API:", e);
+          throw new Error("Não foi possível conectar ao servidor. Certifique-se de que o Python está rodando e você acessou via http://127.0.0.1:5000");
+      }
+
+      // Registro bem sucedido
+      // Salvar na "Sessão" local para o front-end
+      localStorage.setItem('nexus_user', JSON.stringify({
+        id: result.user_id,
+        nome: data.email.split('@')[0],
+        empresa_id: result.empresa_id,
+        empresa_tipo: tipo,
+        empresa_nome: data.nome_empresa
+      }));
+
+      // Redirecionar para o painel correspondente
+      window.location.href = tipo + '.html';
+
+    } catch (ex) {
+      let msg = 'Erro ao realizar cadastro.';
+      if (ex && typeof ex === 'object') {
+        msg = ex.message || msg;
+      }
+      err.textContent = msg;
+      err.style.display = 'block';
+      btn.disabled = false;
+      btn.querySelector('span').textContent = 'Finalizar Registro';
+    }
+  });
+
+  function checkStrength(val) {
+    const bar = document.getElementById('sBar');
+    const txt = document.getElementById('sText');
+    let s = 0;
+    if (val.length >= 6) s++;
+    if (/[A-Z]/.test(val)) s++;
+    if (/[0-9]/.test(val)) s++;
+    if (/[^A-Za-z0-9]/.test(val)) s++;
+
+    const colors = ['#f43f5e', '#f59e0b', '#10b981', '#6366f1'];
+    const texts = ['Muito Fraca', 'Fraca', 'Média', 'Forte', 'Excelente'];
+    
+    bar.style.width = (s * 25) + '%';
+    bar.style.background = colors[s-1] || '#404050';
+    txt.textContent = texts[s] || 'Digite sua senha';
+    txt.style.color = colors[s-1] || '#606070';
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Portal de Operações Inteligentes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    :root {
+      --forn: #6366f1;
+      --client: #10b981;
+      --bg: #030305;
+    }
+    body { background: var(--bg); color: #fff; font-family: 'Inter', sans-serif; margin: 0; min-height: 100vh; overflow-x: hidden; }
+    
+    .bg-portal { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+    .bg-grid {
+      position: absolute; inset: 0;
+      background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 50px 50px;
+      mask-image: radial-gradient(circle at 50% 50%, black, transparent 80%);
+    }
+    .glow { position: absolute; border-radius: 50%; filter: blur(150px); opacity: 0.15; }
+
+    .nexus-hero {
+      position: relative; z-index: 10;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 5rem 1.5rem; min-height: 100vh;
+    }
+    
+    .hero-title { text-align: center; margin-bottom: 5rem; }
+    .hero-title h1 { 
+      font-family: 'Space Grotesk', sans-serif; font-size: clamp(3rem, 12vw, 6rem); 
+      font-weight: 800; line-height: 0.9; letter-spacing: -0.06em; margin: 0 0 1.5rem;
+      background: linear-gradient(180deg, #fff 0%, rgba(255,255,255,0.4) 100%);
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .hero-title p { color: #808090; font-size: 1.25rem; max-width: 600px; margin: 0 auto; line-height: 1.6; }
+
+    .nexus-cards {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 2rem; width: 100%; max-width: 1000px;
+    }
+    
+    .portal-card {
+      background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 40px; padding: 4rem 3rem; backdrop-filter: blur(20px);
+      position: relative; overflow: hidden; display: flex; flex-direction: column;
+      transition: 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .portal-card:hover {
+      transform: translateY(-15px); border-color: rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.04); box-shadow: 0 40px 100px -20px rgba(0,0,0,0.8);
+    }
+    
+    .icon {
+      width: 70px; height: 70px; border-radius: 22px; display: flex; align-items: center; justify-content: center;
+      font-size: 2rem; margin-bottom: 2.5rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+    }
+    
+    .portal-card.forn:hover .icon { color: var(--forn); border-color: var(--forn); }
+    .portal-card.client:hover .icon { color: var(--client); border-color: var(--client); }
+
+    h2 { font-family: 'Space Grotesk', sans-serif; font-size: 2.25rem; font-weight: 700; margin: 0 0 1rem; }
+    p { color: #808090; font-size: 1.1rem; margin-bottom: 3rem; line-height: 1.5; }
+    
+    .btn-group { display: flex; gap: 1rem; margin-top: auto; }
+    .btn-action {
+      flex: 1; height: 54px; border: none; border-radius: 18px; color: #fff;
+      font-weight: 800; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.1em;
+      cursor: pointer; transition: 0.3s; display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
+    .btn-action:hover { transform: translateY(-4px); filter: brightness(1.2); }
+    .btn-action.outline { background: transparent; border: 1px solid rgba(255,255,255,0.1); }
+    .btn-action.outline:hover { background: rgba(255,255,255,0.05); }
+
+    .nexus-footer { margin-top: 6rem; text-align: center; color: #808090; font-size: 0.95rem; }
+    .nexus-footer a { color: #fff; text-decoration: none; font-weight: 700; border-bottom: 2px solid var(--forn); }
+  </style>
+</head>
+<body>
+
+<div class="bg-portal">
+  <div class="bg-grid"></div>
+  <div class="glow" style="width: 600px; height: 600px; background: var(--forn); top: -200px; left: -100px;"></div>
+  <div class="glow" style="width: 500px; height: 500px; background: var(--client); bottom: -150px; right: -100px;"></div>
+</div>
+
+<main class="nexus-hero">
+  <header class="hero-title">
+    <h1>Nexus</h1>
+    <p>O ecossistema definitivo para gestão operacional inteligente. Escolha seu perfil para começar.</p>
+  </header>
+
+  <div class="nexus-cards">
+    <div class="portal-card forn">
+      <div class="icon"><i class="fas fa-tower-broadcast"></i></div>
+      <h2>Fornecedor</h2>
+      <p>Publique seu catálogo, gerencie estoque e acompanhe sua equipe comercial em tempo real.</p>
+      <div class="btn-group">
+        <button class="btn-action" onclick="location.href='cadastro.html?tipo=fornecedor'" style="background: var(--forn);">
+          <i class="fas fa-plus-circle"></i> Cadastrar
+        </button>
+        <button class="btn-action outline" onclick="location.href='login.html?tipo=fornecedor'">
+          Entrar
+        </button>
+      </div>
+    </div>
+
+    <div class="portal-card client">
+      <div class="icon"><i class="fas fa-user-check"></i></div>
+      <h2>Cliente</h2>
+      <p>Acesse mercados exclusivos, faça pedidos diretos e gerencie seus contatos estratégicos.</p>
+      <div class="btn-group">
+        <button class="btn-action" onclick="location.href='cadastro.html?tipo=cliente'" style="background: var(--client);">
+          <i class="fas fa-plus-circle"></i> Cadastrar
+        </button>
+        <button class="btn-action outline" onclick="location.href='login.html?tipo=cliente'">
+          Entrar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="nexus-footer">
+    Já faz parte da rede? <a href="login.html">Acessar minha conta</a>
+  </footer>
+</main>
+
+</body>
+</html>

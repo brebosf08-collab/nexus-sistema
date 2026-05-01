@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus — Dashboard Cliente</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="./static/app.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root { --accent: #10b981; --bg: #030305; --sidebar-w: 280px; }
+    body { background: var(--bg); color: #fff; font-family: 'Inter', sans-serif; margin: 0; display: flex; min-height: 100vh; }
+    
+    .sidebar { width: var(--sidebar-w); background: rgba(255,255,255,0.02); border-right: 1px solid rgba(255,255,255,0.05); padding: 2rem; display: flex; flex-direction: column; backdrop-filter: blur(20px); position: fixed; height: 100vh; }
+    .logo { font-family: 'Space Grotesk', sans-serif; font-size: 1.5rem; font-weight: 800; display: flex; align-items: center; gap: 12px; margin-bottom: 3rem; }
+    .logo i { color: var(--accent); }
+    
+    .nav-link { display: flex; align-items: center; gap: 15px; padding: 1rem 1.25rem; border-radius: 14px; color: #808090; text-decoration: none; transition: 0.3s; margin-bottom: 0.5rem; font-weight: 600; }
+    .nav-link:hover, .nav-link.active { background: rgba(16, 185, 129, 0.1); color: var(--accent); }
+    
+    .main-content { margin-left: var(--sidebar-w); flex: 1; padding: 3rem; }
+    .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3rem; }
+    .user-profile { display: flex; align-items: center; gap: 15px; }
+    
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; margin-bottom: 3rem; }
+    .stat-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 2rem; border-radius: 24px; }
+    .stat-card h3 { color: #606070; font-size: 0.75rem; text-transform: uppercase; margin: 0 0 1rem; }
+    .stat-card p { font-size: 2rem; font-weight: 800; margin: 0; font-family: 'Space Grotesk', sans-serif; }
+    
+    .section-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; }
+    .grid-fornecedores { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; }
+    .forn-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 2rem; border-radius: 24px; transition: 0.3s; }
+    .forn-card:hover { transform: translateY(-5px); border-color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="logo" aria-label="Logo Nexus"><i class="fas fa-user-shield"></i> Nexus</div>
+  <nav>
+    <a href="#" class="nav-link active" tabindex="0"><i class="fas fa-search"></i> Explorar</a>
+    <a href="#" class="nav-link" tabindex="0"><i class="fas fa-history"></i> Meus Pedidos</a>
+    <a href="#" class="nav-link" tabindex="0"><i class="fas fa-address-book"></i> Fornecedores</a>
+    <a href="#" class="nav-link" tabindex="0"><i class="fas fa-cog"></i> Perfil</a>
+  </nav>
+  <div style="margin-top: auto;">
+    <button onclick="logout()" class="nav-link" style="width: 100%; border: none; background: transparent; cursor: pointer;" aria-label="Sair da conta">
+      <i class="fas fa-sign-out-alt"></i> Sair
+    </button>
+  </div>
+</aside>
+
+<main class="main-content">
+  <div class="top-bar">
+    <div>
+      <h2 id="welcomeMsg" style="margin: 0; font-size: 2rem; font-weight: 800;">Portal do Cliente</h2>
+      <p id="empresaName" style="color: #606070; margin: 5px 0 0;">Carregando...</p>
+    </div>
+    <div class="user-profile">
+      <div class="user-info" style="text-align: right; margin-right: 15px;">
+        <b id="userName">Usuário</b><br>
+        <span id="userCargo" style="font-size: 0.75rem; color: #606070;">Comprador</span>
+      </div>
+      <div id="userAvatar" style="width: 45px; height: 45px; border-radius: 12px; background: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: 800;">C</div>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <h3>Compras Mês</h3>
+      <p id="comprasMes">R$ 0,00</p>
+    </div>
+    <div class="stat-card">
+      <h3>Pedidos Ativos</h3>
+      <p id="pedidosAtivos">0</p>
+    </div>
+    <div class="stat-card">
+      <h3>Fornecedores Salvos</h3>
+      <p id="fornecedoresSalvos">0</p>
+    </div>
+  </div>
+
+  <section>
+    <h3 class="section-title">Fornecedores Recomendados</h3>
+    <div class="grid-fornecedores">
+      <div class="forn-card" tabindex="0">
+        <h4 style="margin: 0 0 10px;">Distribuidora Global</h4>
+        <p style="font-size: 0.85rem; color: #606070;">Tecnologia e Logística</p>
+        <button style="width: 100%; background: var(--accent); border: none; color: #fff; height: 40px; border-radius: 10px; font-weight: 700; margin-top: 15px; cursor: pointer;">Ver Catálogo</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+  // Sessão e preenchimento de dados
+  (function() {
+    const userData = JSON.parse(localStorage.getItem('nexus_user'));
+    if (!userData || userData.empresa_tipo !== 'cliente') {
+      window.location.href = 'index.html';
+      return;
+    }
+    // Dados básicos
+    document.getElementById('userName').textContent = userData.nome;
+    document.getElementById('empresaName').textContent = userData.empresa_nome || 'Nexus Network';
+    document.getElementById('welcomeMsg').textContent = `Olá, ${userData.nome}!`;
+    document.getElementById('userCargo').textContent = 'Comprador';
+    // Avatar
+    const avatar = document.getElementById('userAvatar');
+    avatar.textContent = (userData.nome || 'C')[0].toUpperCase();
+    // Estatísticas (mock)
+    document.getElementById('comprasMes').textContent = 'R$ 0,00';
+    document.getElementById('pedidosAtivos').textContent = '0';
+    document.getElementById('fornecedoresSalvos').textContent = '0';
+  })();
+
+  function logout() {
+    localStorage.removeItem('nexus_user');
+    window.location.href = 'index.html';
+  }
+</script>
+
+</body>
+</html>
