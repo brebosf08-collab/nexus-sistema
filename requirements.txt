@@ -5,3 +5,4 @@ supabase>=2.10.0
 python-dotenv>=1.0.0
 httpx>=0.26.0
 httpcore>=1.0.0
+gunicorn
