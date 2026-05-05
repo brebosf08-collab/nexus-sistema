@@ -3,262 +3,466 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ empresa.nome }} — Centro de Comando Nexus</title>
+  <title>Nexus — Intelligence Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=nexus-v2">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root { 
+      --accent: #6366f1; 
+      --bg: #030305; 
+      --sidebar-w: 260px; 
+      --card-bg: rgba(255,255,255,0.02); 
+      --red: #f43f5e;
+      --green: #10b981;
+      --glass: rgba(255, 255, 255, 0.03);
+    }
+    
+    * { box-sizing: border-box; }
+    body { background: var(--bg); color: #fff; font-family: 'Inter', sans-serif; margin: 0; display: flex; min-height: 100vh; overflow-x: hidden; }
+    
+    /* Sidebar Fix */
+    .sidebar { 
+      width: var(--sidebar-w); 
+      background: rgba(255,255,255,0.01); 
+      border-right: 1px solid rgba(255,255,255,0.05); 
+      padding: 2rem 1.5rem; 
+      display: flex; 
+      flex-direction: column; 
+      backdrop-filter: blur(20px); 
+      position: fixed; 
+      height: 100vh; 
+      z-index: 100;
+    }
+    
+    .logo { font-family: 'Space Grotesk', sans-serif; font-size: 1.5rem; font-weight: 800; display: flex; align-items: center; gap: 12px; margin-bottom: 3rem; color: #fff; text-decoration: none; }
+    .logo i { color: var(--accent); text-shadow: 0 0 20px var(--accent); }
+    
+    .nav-group { display: flex; flex-direction: column; gap: 8px; }
+    .nav-link { 
+      display: flex; 
+      align-items: center; 
+      gap: 12px; 
+      padding: 0.85rem 1rem; 
+      border-radius: 14px; 
+      color: #707080; 
+      text-decoration: none; 
+      transition: 0.3s; 
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    .nav-link:hover { color: #fff; background: rgba(255,255,255,0.03); }
+    .nav-link.active { background: var(--accent); color: #fff; box-shadow: 0 10px 20px rgba(99, 102, 241, 0.2); }
+    
+    /* Main Content Fix */
+    .main-content { 
+      margin-left: var(--sidebar-w); 
+      width: calc(100% - var(--sidebar-w));
+      padding: 2.5rem; 
+      transition: 0.3s;
+    }
+    
+    .page-section { display: none; animation: fadeIn 0.5s ease; }
+    .page-section.active { display: block; }
+    
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .header-box { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 3rem; }
+    .header-box h1 { font-family: 'Space Grotesk', sans-serif; font-size: 2.5rem; font-weight: 800; margin: 0; }
+    
+    /* Stats */
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2.5rem; }
+    .stat-card { background: var(--glass); border: 1px solid rgba(255,255,255,0.05); padding: 1.75rem; border-radius: 24px; }
+    .stat-card h3 { font-size: 0.7rem; color: #606070; text-transform: uppercase; margin: 0 0 10px; letter-spacing: 0.1em; }
+    .stat-card p { font-size: 1.75rem; font-weight: 800; margin: 0; font-family: 'Space Grotesk', sans-serif; }
+
+    /* Charts Container */
+    .dashboard-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-bottom: 3rem; }
+    .chart-box { background: var(--glass); border: 1px solid rgba(255,255,255,0.05); padding: 2rem; border-radius: 32px; height: 350px; }
+
+    /* Product Grid */
+    .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; }
+    .item-card { background: var(--glass); border: 1px solid rgba(255,255,255,0.05); border-radius: 28px; padding: 1.75rem; transition: 0.3s; position: relative; }
+    .item-card:hover { border-color: var(--accent); transform: translateY(-5px); }
+    
+    .item-card h4 { margin: 15px 0 10px; font-size: 1.25rem; font-weight: 700; }
+    .price-info { display: flex; gap: 20px; margin-bottom: 20px; }
+    .price-info span { display: block; }
+    .price-info label { font-size: 0.6rem; color: #606070; font-weight: 800; text-transform: uppercase; }
+    .price-info b { font-size: 1rem; color: #fff; }
+    .price-info .sale { color: var(--accent); }
+
+    .stock-ui { display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.02); padding: 12px; border-radius: 16px; }
+    .btn-qty { width: 36px; height: 36px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: transparent; color: #fff; cursor: pointer; }
+    .btn-qty:hover { background: var(--accent); border-color: var(--accent); }
+
+    /* Empty States */
+    .empty-msg { text-align: center; padding: 4rem; color: #505060; background: var(--glass); border-radius: 32px; border: 2px dashed rgba(255,255,255,0.03); }
+
+    /* Modals */
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 1000; align-items: center; justify-content: center; }
+    .modal-content { background: #0a0a0c; border: 1px solid rgba(255,255,255,0.1); border-radius: 32px; padding: 2.5rem; width: 90%; max-width: 480px; }
+    .field { margin-bottom: 1.25rem; }
+    .field label { display: block; font-size: 0.7rem; font-weight: 800; color: #606070; margin-bottom: 8px; text-transform: uppercase; }
+    input, select { width: 100%; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; height: 50px; padding: 0 1rem; color: #fff; }
+    
+    .btn-main { background: var(--accent); color: #fff; border: none; padding: 14px 24px; border-radius: 14px; font-weight: 700; cursor: pointer; width: 100%; }
+    .btn-add-item { background: var(--accent); color: #fff; border: none; padding: 12px 20px; border-radius: 12px; font-weight: 700; cursor: pointer; }
+
+    @media (max-width: 900px) {
+      .sidebar { width: 80px; padding: 2rem 1rem; }
+      .nav-link span { display: none; }
+      .main-content { margin-left: 80px; width: calc(100% - 80px); }
+      .dashboard-grid { grid-template-columns: 1fr; }
+    }
+  </style>
 </head>
 <body>
 
-<div class="bg-grid"></div>
-<div class="glow-orb" style="width: 600px; height: 600px; background: var(--accent); top: -200px; right: -100px; opacity: 0.1;"></div>
+<aside class="sidebar">
+  <a href="#" class="logo"><i class="fas fa-tower-broadcast"></i> <span>Nexus</span></a>
+  <nav class="nav-group">
+    <div class="nav-link active" onclick="showSection('dashboard')"><i class="fas fa-chart-pie"></i> <span>Visão Geral</span></div>
+    <div class="nav-link" onclick="showSection('estoque')"><i class="fas fa-box"></i> <span>Estoque</span></div>
+    <div class="nav-link" onclick="showSection('pedidos')"><i class="fas fa-shopping-bag"></i> <span>Pedidos</span></div>
+    <div class="nav-link" onclick="showSection('clientes')"><i class="fas fa-users"></i> <span>Clientes</span></div>
+    <div class="nav-link" onclick="showSection('insights')"><i class="fas fa-brain"></i> <span>Insights IA</span></div>
+  </nav>
+  
+  <div style="margin-top: auto; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 1.5rem;">
+    <div style="font-size: 0.8rem; color: #505060; margin-bottom: 10px;" id="userName">...</div>
+    <div class="nav-link" onclick="logout()"><i class="fas fa-sign-out-alt"></i> <span>Sair</span></div>
+  </div>
+</aside>
 
-<div class="top-bar">
-  <h1>
-    <i class="fas fa-tower-broadcast" style="color:var(--accent); margin-right: 12px; font-size: 0.9em;"></i>
-    <span class="text-gradient">{{ empresa.nome }}</span>
-  </h1>
-  <div class="info">
-    <span style="font-weight: 700; font-size: 0.9rem; color: var(--muted);"><i class="fas fa-user-shield" style="margin-right: 8px;"></i> {{ usuario }}</span>
-    <button class="btn-logout" onclick="logout()"><i class="fas fa-power-off"></i> Encerrar Sessão</button>
+<main class="main-content">
+  <!-- AVISO DE PROTOCOLO INCORRETO -->
+  <div id="fileWarning" style="display:none; background:#f43f5e; color:#fff; padding:15px; border-radius:12px; margin-bottom:20px; font-weight:700; text-align:center; border: 2px solid #fff;">
+    <i class="fas fa-exclamation-triangle"></i> VOCÊ ABRIU O ARQUIVO DIRETO DA PASTA. <br>
+    O sistema NÃO vai funcionar assim. Por favor, acesse via: <span style="text-decoration:underline;">http://127.0.0.1:5000</span>
+  </div>
+
+  <script>
+    if (window.location.protocol === 'file:') {
+      document.getElementById('fileWarning').style.display = 'block';
+    }
+  </script>
+
+  <!-- SEÇÃO DASHBOARD -->
+  <section id="sec-dashboard" class="page-section active">
+    <div class="header-box">
+      <div>
+        <h1>Nexus Intelligence</h1>
+        <p style="color: #606070; margin: 8px 0 0;">Análise de performance operacional</p>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <h3>Valor em Estoque</h3>
+        <p id="stat-valor">R$ 0,00</p>
+        <small style="color: #606070; font-size: 0.6rem; margin-top: 5px; display: block;">* Valor Bruto de Venda</small>
+      </div>
+      <div class="stat-card">
+        <h3>Produtos Ativos</h3>
+        <p id="stat-itens">0</p>
+      </div>
+      <div class="stat-card">
+        <h3>Margem Média</h3>
+        <p id="stat-margem" style="color:var(--green)">0%</p>
+        <small style="color: #f43f5e; font-size: 0.55rem; margin-top: 5px; display: block; font-weight: 700;">⚠ Atenção: Margem Bruta (Sem dedução de impostos)</small>
+      </div>
+      <div class="stat-card">
+        <h3>Pedidos Mês</h3>
+        <p>24</p>
+      </div>
+    </div>
+
+    <div class="dashboard-grid">
+      <div class="chart-box"><canvas id="mainChart"></canvas></div>
+      <div class="chart-box"><canvas id="pieChart"></canvas></div>
+    </div>
+  </section>
+
+  <!-- SEÇÃO ESTOQUE -->
+  <section id="sec-estoque" class="page-section">
+    <div class="header-box">
+      <div>
+        <h1>Gerenciamento de Estoque</h1>
+        <p style="color:#606070; font-size: 0.9rem;">Controle de inventário e categorias.</p>
+      </div>
+      <div style="display:flex; gap:12px;">
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 4px 12px; border-radius: 12px; display: flex; align-items: center; gap: 8px;">
+          <input type="text" id="newCatName" placeholder="Nova Categoria..." style="background: transparent; border: none; color: #fff; outline: none; font-size: 0.8rem; width: 140px; height: 32px;">
+          <button onclick="addCat()" style="background: var(--accent); border: none; color: #fff; width: 28px; height: 28px; border-radius: 8px; cursor: pointer;"><i class="fas fa-plus"></i></button>
+        </div>
+        <button class="btn-add-item" onclick="openModal()"><i class="fas fa-plus"></i> Novo Item</button>
+      </div>
+    </div>
+    <div id="productGrid" class="grid-container"></div>
+  </section>
+
+  <!-- SEÇÃO PEDIDOS (NOVA) -->
+  <section id="sec-pedidos" class="page-section">
+    <div class="header-box"><h1>Fluxo de Pedidos</h1></div>
+    <div class="empty-msg">
+      <i class="fas fa-receipt" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+      <p>Nenhum pedido processado nas últimas 24h.</p>
+    </div>
+  </section>
+
+  <!-- SEÇÃO CLIENTES (NOVA) -->
+  <section id="sec-clientes" class="page-section">
+    <div class="header-box"><h1>Minha Carteira</h1></div>
+    <div class="grid-container">
+       <div class="item-card" style="text-align: center; padding: 3rem;">
+         <i class="fas fa-user-circle" style="font-size: 4rem; color: var(--accent);"></i>
+         <h4>Nexus Distribuidora</h4>
+         <p style="color:#606070">Cliente Ouro</p>
+       </div>
+    </div>
+  </section>
+
+  <!-- SEÇÃO INSIGHTS (NOVA) -->
+  <section id="sec-insights" class="page-section">
+    <div class="header-box"><h1>Insights de IA</h1></div>
+    <div class="stat-card" style="background: linear-gradient(45deg, rgba(99,102,241,0.1), transparent); border-color: var(--accent);">
+      <h4>💡 Recomendação Operacional</h4>
+      <p style="font-size: 1rem; line-height: 1.6; color: #a0a0b0;">
+        Baseado no seu histórico, recomendamos aumentar o estoque de itens na categoria "Tecnologia" em 15% para o próximo mês devido à sazonalidade.
+      </p>
+    </div>
+  </section>
+
+</main>
+
+<!-- Modal Produto -->
+<div id="productModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header" style="display:flex; justify-content:space-between; margin-bottom: 2rem;">
+      <h2 style="margin:0">Novo Produto</h2>
+      <button onclick="closeModal()" style="background:transparent; border:none; color:#606070; font-size: 1.5rem;">&times;</button>
+    </div>
+    <form id="productForm">
+      <div class="field"><label>Nome</label><input type="text" id="pNome" required></div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+        <div class="field"><label>Custo (R$)</label><input type="number" step="0.01" id="pCusto" required></div>
+        <div class="field"><label>Venda (R$)</label><input type="number" step="0.01" id="pPreco" required></div>
+      </div>
+      <div class="field"><label>Categoria</label>
+        <div style="display:flex; gap:10px;">
+          <select id="pCategoria" style="flex:1"></select>
+          <button type="button" onclick="addCat()" style="width:50px; background:var(--glass); border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:10px;">+</button>
+        </div>
+      </div>
+      <div class="field"><label>Quantidade Inicial</label><input type="number" id="pQtd" required></div>
+      <button type="submit" class="btn-main" id="btnSalvar">Cadastrar no Nexus</button>
+    </form>
   </div>
 </div>
 
-<div class="mobile-nav">
-  <button class="nav-item active" data-sec="dashboard" onclick="navTo('dashboard')"><i class="fas fa-chart-pie"></i></button>
-  <button class="nav-item" data-sec="estoque" onclick="navTo('estoque')"><i class="fas fa-box"></i></button>
-  <button class="nav-item" data-sec="pedidos" onclick="navTo('pedidos')"><i class="fas fa-receipt"></i></button>
-  <button class="nav-item" data-sec="vendedores" onclick="navTo('vendedores')"><i class="fas fa-users"></i></button>
-</div>
-
-<div class="layout">
-  <aside class="sidebar">
-    <div class="nav-item active" data-sec="dashboard" onclick="navTo('dashboard')"><i class="fas fa-chart-pie"></i> <span>Dashboard Global</span></div>
-    <div class="nav-item" data-sec="estoque" onclick="navTo('estoque')"><i class="fas fa-box"></i> <span>Inventário</span></div>
-    <div class="nav-item" data-sec="categorias" onclick="navTo('categorias')"><i class="fas fa-tags"></i> <span>Categorias</span></div>
-    <div class="nav-item" data-sec="pedidos" onclick="navTo('pedidos')"><i class="fas fa-file-invoice-dollar"></i> <span>Gestão de Pedidos</span></div>
-    <div class="nav-item" data-sec="vendedores" onclick="navTo('vendedores')"><i class="fas fa-users-gear"></i> <span>Time Comercial</span></div>
-    <div class="nav-item" data-sec="reunioes" onclick="navTo('reunioes')"><i class="fas fa-calendar-check"></i> <span>Agendas</span></div>
-    <div class="nav-item" data-sec="contatos" onclick="navTo('contatos')"><i class="fas fa-address-book"></i> <span>Contatos</span></div>
-    <div class="nav-item" data-sec="historico" onclick="navTo('historico')"><i class="fas fa-clock-rotate-left"></i> <span>Auditoria/Log</span></div>
-  </aside>
-
-  <main class="main-content">
-    <!-- DASHBOARD -->
-    <div id="sec-dashboard" class="page-section active">
-      <h2 class="page-title"><i class="fas fa-grid-2"></i> Painel de Controle</h2>
-      
-      <div class="card glass" style="margin-bottom: 3rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <h3 style="margin-bottom: 0.5rem;"><i class="fas fa-share-nodes" style="color:var(--accent)"></i> Ativar Ecossistema</h3>
-            <p style="color: var(--muted); margin: 0; max-width: 500px;">Seu catálogo profissional está online. Compartilhe o link com clientes e representantes.</p>
-          </div>
-          <div class="badge-status" style="background: var(--green-g); color: var(--green); padding: 8px 16px; border-radius: 12px; font-size: 0.7rem; font-weight: 800;">
-            <i class="fas fa-circle" style="font-size: 0.5rem; margin-right: 6px;"></i> OPERACIONAL
-          </div>
-        </div>
-        <div class="inline-form" style="margin-top: 2rem; background: rgba(255,255,255,0.02); padding: 1.5rem; border-radius: 20px; border: 1px solid var(--border);">
-          <input type="text" id="link-vitrine" value="http://127.0.0.1:5000/loja/{{ empresa.id }}" readonly style="background:transparent; border:none; color:var(--accent); font-weight: 700; flex:1; font-size: 1.1rem;">
-          <button class="btn btn-primary" onclick="copiarLinkVitrine()"><i class="fas fa-copy"></i> Copiar Link</button>
-          <a href="/loja/{{ empresa.id }}" target="_blank" class="btn btn-outline">Visualizar Vitrine</a>
-        </div>
-        <div id="msg-copy" style="color: var(--green); font-size: 0.85rem; margin-top: 15px; display: none; font-weight: 700;"><i class="fas fa-check-double"></i> Pronto! Link copiado para transferência.</div>
-      </div>
-      
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="label">Total em Produtos</div>
-          <div class="value" id="d-produtos">0</div>
-          <i class="fas fa-boxes"></i>
-        </div>
-        <div class="stat-card">
-          <div class="label">Avaliação de Estoque</div>
-          <div class="value" id="d-valor" style="color: var(--green);">R$ 0</div>
-          <i class="fas fa-money-bill-trend-up"></i>
-        </div>
-        <div class="stat-card">
-          <div class="label">Alertas de Reposição</div>
-          <div class="value" id="d-baixos" style="color: var(--amber);">0</div>
-          <i class="fas fa-triangle-exclamation"></i>
-        </div>
-        <div class="stat-card">
-          <div class="label">Vendas Registradas</div>
-          <div class="value" id="d-pedidos">0</div>
-          <i class="fas fa-receipt"></i>
-        </div>
-      </div>
-    </div>
-
-    <!-- OUTRAS SEÇÕES (ESTOQUE, PEDIDOS, ETC - MESMA LÓGICA DE IDS) -->
-    <!-- ESTOQUE -->
-    <div id="sec-estoque" class="page-section">
-      <h2 class="page-title"><i class="fas fa-boxes-stacked"></i> Inventário Estratégico</h2>
-      <div class="card">
-        <h3>Novo Ativo no Sistema</h3>
-        <form onsubmit="addProduto(event)" enctype="multipart/form-data">
-          <div class="form-grid">
-            <div class="field"><label>Nome do Produto</label><input name="nome" required placeholder="Ex: Produto Premium X"></div>
-            <div class="field"><label>Referência / SKU</label><input name="sku" placeholder="SKU-2026-ABC"></div>
-            <div class="field"><label>Categoria</label><select name="categoria_id" id="sel-cat-prod"><option value="">Selecione...</option></select></div>
-            <div class="field"><label>Nova Categoria</label><input id="new-cat-prod" placeholder="Ou digite uma nova"></div>
-            <div class="field"><label>Custo Unitário (R$)</label><input name="custo" type="number" step="0.01" required></div>
-            <div class="field"><label>Preço Final (R$)</label><input name="preco" type="number" step="0.01" required></div>
-            <div class="field"><label>Qtd Inicial</label><input name="quantidade" type="number" required></div>
-            <div class="field"><label>Alerta Mínimo</label><input name="minimo" type="number" required></div>
-            <div class="field full"><label>Descrição & Especificações</label><textarea name="descricao"></textarea></div>
-            <div class="field"><label>Mídia do Produto</label><input type="file" name="imagem" accept="image/*"></div>
-          </div>
-          <button type="submit" class="btn btn-primary" style="margin-top: 1.5rem;">Cadastrar Produto</button>
-        </form>
-        <div id="msg-prod" class="msg"></div>
-      </div>
-      <div class="card">
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>ID</th><th>Produto</th><th>Categoria</th><th>Custo</th><th>Venda</th><th>Estoque</th><th>Status</th><th>Ações</th></tr></thead>
-            <tbody id="tb-estoque"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- CATEGORIAS -->
-    <div id="sec-categorias" class="page-section">
-      <h2 class="page-title"><i class="fas fa-tags"></i> Estrutura de Categorias</h2>
-      <div class="card">
-        <div class="inline-form" style="max-width: 500px;">
-          <input id="inp-cat" placeholder="Nova Classificação..." class="field" style="margin-bottom:0">
-          <button class="btn btn-primary" onclick="addCategoria()">Adicionar</button>
-        </div>
-        <div id="msg-cat" class="msg"></div>
-        <div class="table-wrap" style="margin-top: 2rem;">
-          <table><thead><tr><th>ID</th><th>Nome da Categoria</th><th>Ações</th></tr></thead><tbody id="tb-categorias"></tbody></table>
-        </div>
-      </div>
-    </div>
-
-    <!-- PEDIDOS -->
-    <div id="sec-pedidos" class="page-section">
-      <h2 class="page-title"><i class="fas fa-file-invoice-dollar"></i> Inteligência de Pedidos</h2>
-      <div class="card">
-        <h3>Nova Transação Direta</h3>
-        <form onsubmit="criarPedido(event)">
-          <div class="form-grid">
-            <div class="field"><label>Cliente</label><input name="cliente" required></div>
-            <div class="field"><label>Data</label><input name="data_pedido" type="date" required></div>
-            <div class="field"><label>Vendedor</label><select name="vendedor_id" id="sel-vend-pedido"></select></div>
-            <div class="field"><label>Notas</label><input name="observacoes"></div>
-          </div>
-          <div style="background: rgba(255,255,255,0.02); padding: 1.5rem; border-radius: 20px; border: 1px solid var(--border); margin-top: 2rem;">
-            <div class="inline-form">
-              <select id="sel-prod-pedido" style="flex:2"></select>
-              <input id="qtd-pedido" type="number" min="1" value="1" style="width:80px">
-              <button type="button" class="btn btn-primary" onclick="addItemPedido()">+</button>
-            </div>
-            <div class="table-wrap" style="margin-top: 1rem; border:none; background:transparent;">
-              <table><thead><tr><th>Item</th><th>Qtd</th><th>Preço</th><th>Subtotal</th><th></th></tr></thead><tbody id="tb-itens-pedido"></tbody></table>
-            </div>
-            <div style="text-align: right; margin-top: 1rem; font-size: 1.5rem; font-weight: 800; color: var(--green);">Total: <span id="total-pedido">R$ 0,00</span></div>
-          </div>
-          <button type="submit" class="btn btn-primary" style="margin-top: 2rem; width: 100%;">Registrar Pedido</button>
-        </form>
-        <div id="msg-pedido" class="msg"></div>
-      </div>
-      <div class="card">
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Pedido</th><th>Cliente</th><th>Data</th><th>Total</th><th>Status</th><th>Ações</th></tr></thead>
-            <tbody id="tb-pedidos"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- VENDEDORES -->
-    <div id="sec-vendedores" class="page-section">
-      <h2 class="page-title"><i class="fas fa-users-gear"></i> Time Comercial</h2>
-      <div class="card">
-        <form onsubmit="addVendedor(event)">
-          <div class="form-grid">
-            <div class="field"><label>Nome</label><input name="nome" required></div>
-            <div class="field"><label>E-mail</label><input name="email" type="email"></div>
-            <div class="field"><label>Telefone</label><input name="telefone"></div>
-            <div class="field"><label>Comissão %</label><input name="comissao" type="number" step="0.1" value="0"></div>
-          </div>
-          <button type="submit" class="btn btn-primary" style="margin-top: 1.5rem;">Credenciar Vendedor</button>
-        </form>
-        <div id="msg-vend" class="msg"></div>
-      </div>
-      <div class="card">
-        <div class="table-wrap"><table><thead><tr><th>ID</th><th>Nome</th><th>E-mail</th><th>Comissão</th><th>Ações</th></tr></thead><tbody id="tb-vendedores"></tbody></table></div>
-      </div>
-    </div>
-
-    <!-- REUNIÕES -->
-    <div id="sec-reunioes" class="page-section">
-      <h2 class="page-title"><i class="fas fa-calendar-check"></i> Agendas</h2>
-      <div class="card">
-        <form onsubmit="addReuniao(event)">
-          <div class="form-grid">
-            <div class="field"><label>Título</label><input name="titulo" required></div>
-            <div class="field"><label>Data/Hora</label><input name="data_hora" type="datetime-local" required></div>
-            <div class="field"><label>Local</label><input name="local"></div>
-            <div class="field full"><label>Participantes</label><input name="participantes"></div>
-          </div>
-          <button type="submit" class="btn btn-primary" style="margin-top: 1.5rem;">Agendar Reunião</button>
-        </form>
-        <div id="msg-reuniao" class="msg"></div>
-      </div>
-      <div class="card">
-        <div class="table-wrap"><table><thead><tr><th>Título</th><th>Data</th><th>Status</th><th>Ações</th></tr></thead><tbody id="tb-reunioes"></tbody></table></div>
-      </div>
-    </div>
-
-    <!-- CONTATOS -->
-    <div id="sec-contatos" class="page-section">
-      <h2 class="page-title"><i class="fas fa-address-book"></i> Contatos</h2>
-      <div class="card">
-        <form onsubmit="addContato(event)">
-          <div class="form-grid">
-            <div class="field"><label>Nome</label><input name="nome" required></div>
-            <div class="field"><label>Documento</label><input name="documento"></div>
-            <div class="field"><label>E-mail</label><input name="email" type="email"></div>
-            <div class="field"><label>Telefone</label><input name="telefone"></div>
-            <div class="field"><label>Localidade</label><input name="endereco"></div>
-            <div class="field"><label>Tipo</label><select name="tipo"><option value="cliente">Cliente</option><option value="fornecedor">Fornecedor</option></select></div>
-          </div>
-          <button type="submit" class="btn btn-primary" style="margin-top: 1.5rem;">Adicionar Contato</button>
-        </form>
-        <div id="msg-contato" class="msg"></div>
-      </div>
-      <div class="card">
-        <div class="table-wrap"><table><thead><tr><th>Nome</th><th>E-mail</th><th>Tipo</th><th>Ações</th></tr></thead><tbody id="tb-contatos"></tbody></table></div>
-      </div>
-    </div>
-
-    <!-- HISTÓRICO -->
-    <div id="sec-historico" class="page-section">
-      <h2 class="page-title"><i class="fas fa-clock-rotate-left"></i> Auditoria</h2>
-      <div class="card">
-        <div class="table-wrap"><table><thead><tr><th>Produto</th><th>Tipo</th><th>Qtd</th><th>Data</th><th>Obs</th></tr></thead><tbody id="tb-historico"></tbody></table></div>
-      </div>
-    </div>
-
-  </main>
-</div>
-
-<script src="{{ url_for('static', filename='app.js') }}?v=nexus-v2"></script>
 <script>
-  function copiarLinkVitrine() {
-    var copyText = document.getElementById("link-vitrine");
-    copyText.select();
-    copyText.setSelectionRange(0, 99999);
-    navigator.clipboard.writeText(copyText.value);
-    document.getElementById("msg-copy").style.display = "block";
-    setTimeout(() => document.getElementById("msg-copy").style.display = "none", 3000);
+  const SUPABASE_URL = "https://gtctfqphvsczeenpysco.supabase.co";
+  const SUPABASE_KEY = 'REMOVED';
+  // Supabase frontend init removed
+
+  const API_BASE = window.location.protocol === 'file:' ? 'http://127.0.0.1:8080' : '';
+  
+  let userData = JSON.parse(localStorage.getItem('nexus_user'));
+  if (!userData) window.location.href = 'login.html';
+
+  // Sincronizar Sessão Flask (Aguardar antes de carregar dados)
+  async function syncSession() {
+    try {
+      const res = await fetch(`${API_BASE}/api/login_session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: userData.login || userData.email || '' })
+      });
+      if (res.ok) {
+        loadCategories();
+        loadProducts();
+      } else {
+        console.warn("Aviso: Falha na sincronização da sessão servidor.");
+      }
+    } catch(e) { 
+      console.error("Erro sync:", e);
+    }
   }
+  syncSession();
+
+  document.getElementById('userName').textContent = userData.nome + " • " + userData.empresa_nome;
+
+  let myChart, myPie;
+
+  function showSection(id) {
+    document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
+    document.getElementById('sec-' + id).classList.add('active');
+    const nav = document.querySelector(`[onclick="showSection('${id}')"]`);
+    if(nav) nav.classList.add('active');
+    if(id === 'dashboard') loadProducts();
+  }
+
+  async function loadCategories() {
+    try {
+      const res = await fetch(`${API_BASE}/api/categorias`);
+      if(!res.ok) throw new Error("Erro ao carregar categorias");
+      const data = await res.json();
+      const sel = document.getElementById('pCategoria');
+      sel.innerHTML = '<option value="">Sem Categoria</option>';
+      if (Array.isArray(data)) {
+          data.forEach(c => sel.innerHTML += `<option value="${c.id}">${c.nome}</option>`);
+      }
+    } catch(e) { console.error(e); }
+  }
+
+  async function addCat() {
+    const input = document.getElementById('newCatName');
+    const nome = input ? input.value : prompt("Nova Categoria:");
+    if(!nome) return;
+    
+    try {
+        const res = await fetch(`${API_BASE}/api/categorias`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nome })
+        });
+        const result = await res.json();
+        if(result.sucesso) {
+            if(input) input.value = '';
+            loadCategories();
+        } else {
+            alert("Erro: " + (result.mensagem || "Erro desconhecido"));
+        }
+    } catch(e) { alert("Falha na rede ao criar categoria."); }
+  }
+
+  async function loadProducts() {
+    const res = await fetch(`${API_BASE}/api/produtos`);
+    const data = await res.json();
+    
+    if(!Array.isArray(data)) return;
+
+    const grid = document.getElementById('productGrid');
+    grid.innerHTML = data.length ? '' : '<div class="empty-msg">Nenhum produto cadastrado.</div>';
+    
+    let totalVenda = 0, totalCusto = 0;
+    data.forEach(p => {
+      totalVenda += (p.preco * p.quantidade);
+      totalCusto += (p.custo * p.quantidade);
+      grid.innerHTML += `
+        <div class="item-card">
+          <span style="font-size:0.6rem; background:var(--accent); padding:4px 8px; border-radius:6px; font-weight:800;">${p.categoria_nome || 'GERAL'}</span>
+          <h4>${p.nome}</h4>
+          <div class="price-info">
+            <div><label>Custo</label><b>R$ ${p.custo?.toFixed(2) || '0,00'}</b></div>
+            <div><label>Venda</label><b class="sale">R$ ${p.preco?.toFixed(2) || '0,00'}</b></div>
+          </div>
+          <div class="stock-ui">
+            <button class="btn-qty" onclick="updQtd(${p.id}, ${p.quantidade}, -1)">-</button>
+            <div style="text-align:center"><small style="font-size:0.5rem; color:#606070; display:block">ESTOQUE</small><b>${p.quantidade}</b></div>
+            <button class="btn-qty" onclick="updQtd(${p.id}, ${p.quantidade}, 1)">+</button>
+          </div>
+          <button onclick="delProd(${p.id})" style="position:absolute; top:1.5rem; right:1.5rem; background:transparent; border:none; color:#404050; cursor:pointer;"><i class="fas fa-trash"></i></button>
+        </div>
+      `;
+    });
+
+    document.getElementById('stat-valor').textContent = "R$ " + totalVenda.toLocaleString('pt-BR');
+    document.getElementById('stat-itens').textContent = data.length;
+    const margem = totalVenda > 0 ? (((totalVenda - totalCusto) / totalVenda) * 100).toFixed(1) : 0;
+    document.getElementById('stat-margem').textContent = margem + "%";
+    
+    if(document.getElementById('sec-dashboard').classList.contains('active')) initCharts(data);
+  }
+
+  async function updQtd(id, curr, amt) {
+    const newVal = Math.max(0, curr + amt);
+    await fetch(`${API_BASE}/api/produtos/${id}/entrada`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantidade: amt })
+    });
+    loadProducts();
+  }
+
+  async function delProd(id) {
+    if(confirm("Excluir produto?")) {
+      await fetch(`${API_BASE}/api/produtos/${id}`, { method: 'DELETE' });
+      loadProducts();
+    }
+  }
+
+  document.getElementById('productForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('btnSalvar');
+    btn.disabled = true;
+    const p = {
+      nome: document.getElementById('pNome').value,
+      custo: parseFloat(document.getElementById('pCusto').value) || 0,
+      preco: parseFloat(document.getElementById('pPreco').value) || 0,
+      quantidade: parseInt(document.getElementById('pQtd').value) || 0,
+      categoria_id: document.getElementById('pCategoria').value || null
+    };
+
+    const res = await fetch(`${API_BASE}/api/produtos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(p)
+    });
+    const result = await res.json();
+    
+    if(result.sucesso) { 
+        closeModal(); 
+        loadProducts(); 
+        e.target.reset(); 
+    } else { 
+        alert("Erro: " + (result.mensagem || "Falha ao cadastrar")); 
+    }
+    btn.disabled = false;
+  });
+
+  function initCharts(data = []) {
+    const ctx = document.getElementById('mainChart').getContext('2d');
+    const ctx2 = document.getElementById('pieChart').getContext('2d');
+    
+    if(myChart) myChart.destroy();
+    if(myPie) myPie.destroy();
+
+    const labels = data.slice(0,6).map(p => p.nome);
+    const stockData = data.slice(0,6).map(p => p.quantidade);
+
+    myChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{ label: 'Nível de Estoque', data: stockData, backgroundColor: '#6366f1', borderRadius: 10 }]
+      },
+      options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' } } } }
+    });
+
+    myPie = new Chart(ctx2, {
+      type: 'doughnut',
+      data: {
+        labels: ['Venda', 'Custo'],
+        datasets: [{ data: [300, 150], backgroundColor: ['#6366f1', '#f43f5e'], borderWeight: 0 }]
+      },
+      options: { maintainAspectRatio: false, cutout: '80%' }
+    });
+  }
+
+  function openModal() { document.getElementById('productModal').style.display = 'flex'; loadCategories(); }
+  function closeModal() { document.getElementById('productModal').style.display = 'none'; }
+  function logout() { localStorage.removeItem('nexus_user'); window.location.href = 'index.html'; }
+
+  loadProducts();
+  setTimeout(() => initCharts(), 500);
 </script>
+
 </body>
 </html>
