@@ -1,0 +1,2 @@
+def mensagem_boas_vindas(nome):
+    return f"Bem-vindo(a), {nome}!"

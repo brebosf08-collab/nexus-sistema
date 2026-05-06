@@ -3,241 +3,443 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ empresa.nome }} — Central do Cliente Nexus</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <title>{{ empresa.nome }} — Nexus Cliente</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=nexus-v2">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
-    :root {
-      --accent: #10b981;
-      --accent-g: rgba(16, 185, 129, 0.08);
-      --accent-bright: #34d399;
-    }
+    :root{--accent:#10b981;--accent-g:rgba(16,185,129,0.10);--bg:#030305;--card:rgba(255,255,255,0.025);--border:rgba(255,255,255,0.07);--muted:#808090;--green:#10b981;--green-g:rgba(16,185,129,0.10);--amber:#f59e0b;--red:#f43f5e;--indigo:#6366f1;--sidebar:260px;}
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--bg);color:#fff;font-family:'Inter',sans-serif;display:flex;min-height:100vh;}
+    .sidebar{width:var(--sidebar);background:rgba(255,255,255,0.015);border-right:1px solid var(--border);position:fixed;top:0;left:0;bottom:0;display:flex;flex-direction:column;padding:1.5rem 1rem;z-index:100;overflow-y:auto;}
+    .logo{font-family:'Space Grotesk',sans-serif;font-size:1.2rem;font-weight:800;display:flex;align-items:center;gap:10px;padding:0.5rem 1rem;margin-bottom:1.5rem;color:var(--accent);}
+    .nav-label{font-size:0.6rem;font-weight:800;color:rgba(255,255,255,0.25);text-transform:uppercase;letter-spacing:0.12em;padding:0 1rem;margin:1rem 0 0.4rem;}
+    .nav-item{display:flex;align-items:center;gap:12px;padding:0.7rem 1rem;border-radius:12px;color:var(--muted);cursor:pointer;transition:0.2s;font-size:0.88rem;font-weight:500;border:none;background:none;width:100%;text-align:left;}
+    .nav-item:hover{background:rgba(255,255,255,0.05);color:#fff;}
+    .nav-item.active{background:var(--accent-g);color:var(--accent);}
+    .nav-item i{width:18px;text-align:center;font-size:0.9rem;}
+    .sidebar-footer{margin-top:auto;padding-top:1rem;border-top:1px solid var(--border);}
+    .main{margin-left:var(--sidebar);padding:2.5rem;min-height:100vh;}
+    .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:2.5rem;}
+    .topbar h1{font-family:'Space Grotesk',sans-serif;font-size:1.6rem;font-weight:800;}
+    .topbar .sub{color:var(--muted);font-size:0.85rem;margin-top:4px;}
+    .btn-logout{background:rgba(244,63,94,0.1);border:1px solid rgba(244,63,94,0.2);color:var(--red);padding:8px 16px;border-radius:10px;cursor:pointer;font-weight:700;font-size:0.8rem;}
+    .sec{display:none;animation:fadeIn 0.25s ease;}
+    .sec.active{display:block;}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+    .page-title{font-family:'Space Grotesk',sans-serif;font-size:1.5rem;font-weight:700;margin-bottom:2rem;display:flex;align-items:center;gap:10px;}
+    .page-title i{color:var(--accent);}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:1.75rem;margin-bottom:1.5rem;}
+    .card h3{font-size:1rem;font-weight:700;margin-bottom:1.25rem;}
+    .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1.25rem;margin-bottom:2rem;}
+    .stat-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1.5rem;position:relative;overflow:hidden;}
+    .stat-card .label{font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.5rem;}
+    .stat-card .value{font-size:1.8rem;font-weight:800;font-family:'Space Grotesk',sans-serif;}
+    .stat-card i{position:absolute;right:1.25rem;top:50%;transform:translateY(-50%);font-size:2.5rem;opacity:0.06;}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.5rem;}
+    .form-grid .full{grid-column:span 2;}
+    .field{display:flex;flex-direction:column;gap:8px;}
+    .field label{font-size:0.7rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;}
+    .field input,.field select,.field textarea{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:0.7rem 1rem;color:#fff;font-size:0.95rem;font-family:'Inter',sans-serif;transition:0.2s;}
+    .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);background:rgba(16,185,129,0.05);}
+    .field textarea{min-height:80px;resize:vertical;}
+    .field select option{background:#1a1a2e;color:#fff;}
+    .btn{padding:0.65rem 1.25rem;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;transition:0.2s;border:none;display:inline-flex;align-items:center;gap:8px;color:#fff;}
+    .btn-primary{background:var(--accent);}
+    .btn-primary:hover{opacity:0.85;transform:translateY(-1px);}
+    .btn-outline{background:transparent;border:1px solid var(--border);color:#fff;}
+    .btn-outline:hover{background:rgba(255,255,255,0.05);}
+    .btn-danger{background:rgba(244,63,94,0.15);border:1px solid rgba(244,63,94,0.3);color:var(--red);}
+    .btn-sm{padding:0.4rem 0.8rem;font-size:0.75rem;border-radius:8px;}
+    .table-wrap{overflow-x:auto;}
+    table{width:100%;border-collapse:collapse;}
+    th{font-size:0.7rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;padding:0.75rem 1rem;text-align:left;border-bottom:1px solid var(--border);}
+    td{padding:0.85rem 1rem;border-bottom:1px solid rgba(255,255,255,0.03);font-size:0.88rem;vertical-align:middle;}
+    tr:last-child td{border-bottom:none;}
+    tr:hover td{background:rgba(255,255,255,0.02);}
+    .badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:8px;font-size:0.7rem;font-weight:700;text-transform:uppercase;}
+    .badge-ok,.badge-confirmado,.badge-pago,.badge-entregue{background:var(--green-g);color:var(--green);}
+    .badge-pendente{background:rgba(245,158,11,0.12);color:var(--amber);}
+    .badge-cancelado{background:rgba(244,63,94,0.12);color:var(--red);}
+    .badge-agendada{background:rgba(99,102,241,0.12);color:var(--indigo);}
+    .forn-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1.25rem;margin-bottom:1.5rem;}
+    .forn-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1.5rem;cursor:pointer;transition:0.3s;}
+    .forn-card:hover{border-color:var(--accent);transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,0.3);}
+    .prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1.25rem;}
+    .prod-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1.25rem;display:flex;flex-direction:column;}
+    .status-sel{background:#1e1e2e;border:1px solid var(--border);border-radius:8px;padding:5px 10px;color:#fff;font-size:0.8rem;font-weight:600;cursor:pointer;}
+    .status-sel option{background:#1e1e2e;color:#fff;}
+    .notif-bar{position:fixed;top:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:0.5rem;max-width:360px;}
+    .notif{padding:1rem 1.5rem;border-radius:14px;font-weight:600;font-size:0.9rem;display:flex;align-items:center;gap:10px;animation:slideIn 0.3s ease;box-shadow:0 8px 32px rgba(0,0,0,0.5);}
+    .notif-success{background:#0d2e22;border:1px solid rgba(16,185,129,0.3);color:var(--green);}
+    .notif-error{background:#2e0d15;border:1px solid rgba(244,63,94,0.3);color:var(--red);}
+    .notif-warn{background:#2e220d;border:1px solid rgba(245,158,11,0.3);color:var(--amber);}
+    .notif-party{background:#0d2e22;border:1px solid rgba(16,185,129,0.4);color:var(--green);}
+    .notif-info{background:#0d1a2e;border:1px solid rgba(99,102,241,0.3);color:var(--indigo);}
+    @keyframes slideIn{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:translateX(0)}}
+    .msg{font-size:0.85rem;margin-top:0.75rem;font-weight:600;}
+    .msg.ok{color:var(--green);}
+    .msg.err{color:var(--red);}
+    .chart-container{position:relative;height:220px;margin-top:1rem;}
+    ::-webkit-scrollbar{width:6px;height:6px;}
+    ::-webkit-scrollbar-track{background:transparent;}
+    ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:3px;}
+    @media(max-width:768px){.sidebar{display:none}.main{margin-left:0}.form-grid{grid-template-columns:1fr}.form-grid .full{grid-column:span 1}}
   </style>
 </head>
 <body>
-
-<div class="bg-grid"></div>
-<div class="glow-orb" style="width: 600px; height: 600px; background: var(--accent); top: -200px; left: -100px; opacity: 0.08;"></div>
-
-<div class="top-bar">
-  <h1>
-    <i class="fas fa-briefcase" style="color:var(--accent); margin-right: 12px; font-size: 0.9em;"></i>
-    <span class="text-gradient">{{ empresa.nome }}</span>
-  </h1>
-  <div class="info">
-    <span style="font-weight: 700; font-size: 0.9rem; color: var(--muted);"><i class="fas fa-user-check" style="margin-right: 8px;"></i> {{ usuario }}</span>
-    <button class="btn-logout" onclick="logout()"><i class="fas fa-power-off"></i> Encerrar Sessão</button>
+<aside class="sidebar">
+  <div class="logo"><i class="fas fa-user-shield"></i> Nexus</div>
+  <div class="nav-label">Principal</div>
+  <button class="nav-item active" data-sec="dashboard" onclick="navTo('dashboard')"><i class="fas fa-chart-pie"></i> Dashboard</button>
+  <div class="nav-label">Mercado</div>
+  <button class="nav-item" data-sec="catalogo" onclick="navTo('catalogo')"><i class="fas fa-store"></i> Catálogo</button>
+  <button class="nav-item" data-sec="pedidos" onclick="navTo('pedidos')"><i class="fas fa-receipt"></i> Meus Pedidos</button>
+  <div class="nav-label">Gestão</div>
+  <button class="nav-item" data-sec="contatos" onclick="navTo('contatos')"><i class="fas fa-address-book"></i> Minha Rede</button>
+  <button class="nav-item" data-sec="reunioes" onclick="navTo('reunioes')"><i class="fas fa-calendar-days"></i> Agenda</button>
+  <button class="nav-item" data-sec="historico" onclick="navTo('historico')"><i class="fas fa-history"></i> Auditoria</button>
+  <div class="sidebar-footer">
+    <button class="nav-item" onclick="logout()"><i class="fas fa-power-off"></i> Encerrar Sessão</button>
   </div>
-</div>
+</aside>
 
-<div class="mobile-nav">
-  <button class="nav-item active" data-sec="dashboard" onclick="navTo('dashboard')"><i class="fas fa-chart-pie"></i></button>
-  <button class="nav-item" data-sec="catalogo" onclick="navTo('catalogo')"><i class="fas fa-store"></i></button>
-  <button class="nav-item" data-sec="pedidos" onclick="navTo('pedidos')"><i class="fas fa-receipt"></i></button>
-  <button class="nav-item" data-sec="reunioes" onclick="navTo('reunioes')"><i class="fas fa-calendar-day"></i></button>
-</div>
+<main class="main">
+  <div class="topbar">
+    <div>
+      <h1><i class="fas fa-user-shield" style="color:var(--accent);margin-right:10px;font-size:0.9em"></i>{{ empresa.nome }}</h1>
+      <div class="sub"><i class="fas fa-user" style="margin-right:6px"></i>{{ usuario }} · Cliente</div>
+    </div>
+    <button class="btn-logout" onclick="logout()"><i class="fas fa-power-off"></i> Sair</button>
+  </div>
 
-<div class="layout">
-  <aside class="sidebar">
-    <div class="nav-item active" data-sec="dashboard" onclick="navTo('dashboard')"><i class="fas fa-chart-pie"></i> <span>Visão Geral</span></div>
-    <div class="nav-item" data-sec="catalogo" onclick="navTo('catalogo')"><i class="fas fa-store"></i> <span>Catálogo Nexus</span></div>
-    <div class="nav-item" data-sec="contatos" onclick="navTo('contatos')"><i class="fas fa-address-book"></i> <span>Minha Rede</span></div>
-    <div class="nav-item" data-sec="pedidos" onclick="navTo('pedidos')"><i class="fas fa-receipt"></i> <span>Meus Pedidos</span></div>
-    <div class="nav-item" data-sec="reunioes" onclick="navTo('reunioes')"><i class="fas fa-calendar-days"></i> <span>Agenda & Reuniões</span></div>
-    <div class="nav-item" data-sec="historico" onclick="navTo('historico')"><i class="fas fa-history"></i> <span>Auditoria Recente</span></div>
-  </aside>
-
-  <main class="main-content">
-    
-    <!-- DASHBOARD -->
-    <section id="sec-dashboard" class="page-section active">
-      <h2 class="page-title"><i class="fas fa-chart-line text-gradient"></i> Central do Cliente</h2>
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="label">Pedidos Realizados</div>
-          <div class="value" id="d-pedidos">0</div>
-          <i class="fas fa-receipt"></i>
-        </div>
-        <div class="stat-card">
-          <div class="label">Total Investido</div>
-          <div class="value" id="d-vpedidos" style="color:var(--accent)">R$ 0,00</div>
-          <i class="fas fa-wallet"></i>
-        </div>
-        <div class="stat-card">
-          <div class="label">Reuniões Agendadas</div>
-          <div class="value" id="d-reunioes" style="color:var(--amber)">0</div>
-          <i class="fas fa-calendar-check"></i>
+  <!-- DASHBOARD -->
+  <div id="sec-dashboard" class="sec active">
+    <div class="page-title"><i class="fas fa-chart-pie"></i> Visão Geral</div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="label">Pedidos Realizados</div><div class="value" id="d-pedidos">0</div><i class="fas fa-receipt"></i></div>
+      <div class="stat-card"><div class="label">Total Investido</div><div class="value" id="d-total" style="color:var(--accent)">R$ 0,00</div><i class="fas fa-wallet"></i></div>
+      <div class="stat-card"><div class="label">Pedidos Pendentes</div><div class="value" id="d-pendentes" style="color:var(--amber)">0</div><i class="fas fa-clock"></i></div>
+      <div class="stat-card"><div class="label">Parceiros na Rede</div><div class="value" id="d-contatos">0</div><i class="fas fa-users"></i></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <h3 style="margin:0"><i class="fas fa-chart-line" style="color:var(--accent)"></i> Compras por Período</h3>
+        <div style="display:flex;gap:0.5rem">
+          <button class="btn btn-sm btn-outline" onclick="loadGrafico('semana')" id="btn-semana">Semana</button>
+          <button class="btn btn-sm btn-primary" onclick="loadGrafico('mes')" id="btn-mes">Mês</button>
         </div>
       </div>
-    </section>
+      <div class="chart-container"><canvas id="chart-compras"></canvas></div>
+    </div>
+    <!-- Últimos pedidos -->
+    <div class="card">
+      <h3><i class="fas fa-clock-rotate-left" style="color:var(--accent)"></i> Últimos Pedidos</h3>
+      <div class="table-wrap"><table><thead><tr><th>Código</th><th>Fornecedor</th><th>Data</th><th>Total</th><th>Status</th></tr></thead><tbody id="tb-ultimos-pedidos"></tbody></table></div>
+    </div>
+  </div>
 
-    <!-- CATÁLOGO -->
-    <section id="sec-catalogo" class="page-section">
-      <h2 class="page-title"><i class="fas fa-store text-gradient"></i> Explorar Mercado</h2>
-      <p style="font-size: 1.1rem; color: var(--muted); margin-bottom: 3.5rem;">Acesse catálogos exclusivos de fornecedores estratégicos no ecossistema Nexus.</p>
-
-      <div id="grid-fornecedores" class="stats-grid" style="margin-bottom: 4rem;"></div>
-
-      <div id="area-produtos-fornecedor" class="card glass" style="display: none; animation: fadeInUp 0.5s ease-out;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2.5rem; border-bottom: 1px solid var(--border); padding-bottom: 2rem;">
-          <h3 id="nome-fornecedor-selecionado" style="margin-bottom: 0;"></h3>
-          <button class="btn btn-outline" onclick="fecharProdutos()"><i class="fas fa-xmark"></i> Fechar</button>
+  <!-- CATÁLOGO -->
+  <div id="sec-catalogo" class="sec">
+    <div class="page-title"><i class="fas fa-store"></i> Explorar Mercado</div>
+    <div id="view-fornecedores">
+      <p style="color:var(--muted);margin-bottom:1.5rem">Selecione um fornecedor para ver o catálogo de produtos.</p>
+      <div id="grid-fornecedores" class="forn-grid"></div>
+    </div>
+    <div id="view-produtos" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
+        <div>
+          <h3 id="nome-forn-sel" style="font-size:1.2rem;font-weight:700;margin:0"></h3>
+          <p style="color:var(--muted);font-size:0.85rem;margin:4px 0 0">Catálogo de produtos disponíveis</p>
         </div>
-        <div id="grid-produtos-fornecedor" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 2rem;"></div>
+        <button class="btn btn-outline" onclick="voltarFornecedores()"><i class="fas fa-arrow-left"></i> Voltar</button>
       </div>
-    </section>
+      <div id="grid-produtos" class="prod-grid"></div>
+    </div>
+  </div>
 
-    <!-- CONTATOS -->
-    <section id="sec-contatos" class="page-section">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-        <h2 class="page-title"><i class="fas fa-address-book text-gradient"></i> Gestão de Contatos</h2>
-        <button class="btn btn-primary" onclick="toggleCard('card-novo-contato')"><i class="fas fa-user-plus"></i> Adicionar Parceiro</button>
+  <!-- PEDIDOS -->
+  <div id="sec-pedidos" class="sec">
+    <div class="page-title"><i class="fas fa-receipt"></i> Meus Pedidos</div>
+    <div class="card">
+      <div class="table-wrap">
+        <table><thead><tr><th>Código</th><th>Fornecedor</th><th>Data</th><th>Total</th><th>Status</th></tr></thead>
+        <tbody id="tb-pedidos"></tbody></table>
       </div>
+    </div>
+  </div>
 
-      <div id="card-novo-contato" class="card" style="display:none; animation: fadeInUp 0.4s ease-out;">
-        <h3>Cadastrar Parceiro Estratégico</h3>
-        <form onsubmit="addContato(event)">
-          <div class="form-grid">
-            <div class="field"><label>Nome / Empresa</label><input name="nome" required></div>
-            <div class="field"><label>Documento</label><input name="documento"></div>
-            <div class="field"><label>E-mail</label><input name="email" type="email"></div>
-            <div class="field"><label>Telefone</label><input name="telefone"></div>
-            <div class="field full"><label>Localização</label><input name="endereco"></div>
-            <div class="field full">
-              <label>Classificação</label>
-              <select name="tipo"><option value="fornecedor">Fornecedor</option><option value="parceiro">Parceiro</option></select>
-            </div>
+  <!-- CONTATOS -->
+  <div id="sec-contatos" class="sec">
+    <div class="page-title"><i class="fas fa-address-book"></i> Minha Rede</div>
+    <div class="card">
+      <h3>Adicionar Parceiro</h3>
+      <form onsubmit="addContato(event)">
+        <div class="form-grid">
+          <div class="field"><label>Nome *</label><input name="nome" required></div>
+          <div class="field"><label>Documento</label><input name="documento"></div>
+          <div class="field"><label>E-mail</label><input name="email" type="email"></div>
+          <div class="field"><label>Telefone</label><input name="telefone"></div>
+          <div class="field full"><label>Localização</label><input name="endereco"></div>
+          <div class="field"><label>Tipo</label>
+            <select name="tipo" style="background:#1e1e2e;border:1px solid var(--border);border-radius:12px;padding:0.7rem 1rem;color:#fff">
+              <option value="fornecedor">Fornecedor</option>
+              <option value="parceiro">Parceiro</option>
+            </select>
           </div>
-          <div style="display: flex; gap: 1rem; margin-top: 2rem;">
-            <button type="submit" class="btn btn-primary">Salvar</button>
-            <button type="button" class="btn btn-outline" onclick="toggleCard('card-novo-contato')">Cancelar</button>
-          </div>
-        </form>
-      </div>
-
-      <div class="card">
-        <div class="table-wrap">
-          <table><thead><tr><th>Nome</th><th>Documento</th><th>E-mail</th><th>Perfil</th><th style="text-align:right">Ações</th></tr></thead><tbody id="tb-contatos"></tbody></table>
         </div>
-      </div>
-    </section>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-user-plus"></i> Salvar Parceiro</button>
+      </form>
+      <div id="msg-contato" class="msg"></div>
+    </div>
+    <div class="card">
+      <div class="table-wrap"><table><thead><tr><th>Nome</th><th>Documento</th><th>E-mail</th><th>Telefone</th><th>Tipo</th><th>Ações</th></tr></thead><tbody id="tb-contatos"></tbody></table></div>
+    </div>
+  </div>
 
-    <!-- PEDIDOS -->
-    <section id="sec-pedidos" class="page-section">
-      <h2 class="page-title"><i class="fas fa-receipt text-gradient"></i> Meus Pedidos</h2>
-      <div class="card">
-        <div class="table-wrap"><table><thead><tr><th>Código</th><th>Fornecedor</th><th>Data</th><th>Status</th><th>Total</th></tr></thead><tbody id="tb-pedidos"></tbody></table></div>
-      </div>
-    </section>
+  <!-- AGENDA -->
+  <div id="sec-reunioes" class="sec">
+    <div class="page-title"><i class="fas fa-calendar-days"></i> Agenda</div>
+    <div class="card">
+      <h3>Novo Evento</h3>
+      <form onsubmit="addReuniao(event)">
+        <div class="form-grid">
+          <div class="field full"><label>Título *</label><input name="titulo" required></div>
+          <div class="field"><label>Data/Hora *</label><input name="data_hora" type="datetime-local" required></div>
+          <div class="field"><label>Local</label><input name="local"></div>
+          <div class="field full"><label>Pauta / Notas</label><textarea name="descricao"></textarea></div>
+        </div>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-calendar-plus"></i> Agendar</button>
+      </form>
+      <div id="msg-reuniao" class="msg"></div>
+    </div>
+    <div class="card">
+      <div class="table-wrap"><table><thead><tr><th>Título</th><th>Data/Hora</th><th>Local</th><th>Status</th><th>Ações</th></tr></thead><tbody id="tb-reunioes"></tbody></table></div>
+    </div>
+  </div>
 
-    <!-- REUNIÕES -->
-    <section id="sec-reunioes" class="page-section">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-        <h2 class="page-title"><i class="fas fa-calendar-days text-gradient"></i> Agenda Nexus</h2>
-        <button class="btn btn-primary" onclick="toggleCard('card-nova-reuniao')"><i class="fas fa-calendar-plus"></i> Novo Evento</button>
-      </div>
-      <div id="card-nova-reuniao" class="card" style="display:none; animation: fadeInUp 0.4s ease-out;">
-        <form onsubmit="addReuniao(event)">
-          <div class="form-grid">
-            <div class="field full"><label>Título</label><input name="titulo" required></div>
-            <div class="field"><label>Data/Hora</label><input name="data_hora" type="datetime-local" required></div>
-            <div class="field"><label>Ambiente</label><input name="local"></div>
-            <div class="field full"><label>Pauta</label><textarea name="descricao"></textarea></div>
-          </div>
-          <button type="submit" class="btn btn-primary">Agendar</button>
-          <button type="button" class="btn btn-outline" onclick="toggleCard('card-nova-reuniao')">Voltar</button>
-        </form>
-      </div>
-      <div class="card">
-        <div class="table-wrap"><table><thead><tr><th>Pauta</th><th>Horário</th><th>Local</th><th>Status</th><th>Ações</th></tr></thead><tbody id="tb-reunioes"></tbody></table></div>
-      </div>
-    </section>
+  <!-- HISTÓRICO -->
+  <div id="sec-historico" class="sec">
+    <div class="page-title"><i class="fas fa-history"></i> Auditoria</div>
+    <div class="card">
+      <div class="table-wrap"><table><thead><tr><th>Ação</th><th>Data</th><th>Valor</th><th>Detalhes</th></tr></thead><tbody id="tb-historico"></tbody></table></div>
+    </div>
+  </div>
+</main>
 
-    <!-- HISTÓRICO -->
-    <section id="sec-historico" class="page-section">
-      <h2 class="page-title"><i class="fas fa-history text-gradient"></i> Auditoria</h2>
-      <div class="card"><div class="table-wrap"><table><thead><tr><th>Ativo</th><th>Ação</th><th>Data</th><th>Auditoria</th></tr></thead><tbody id="tb-historico"></tbody></table></div></div>
-    </section>
+<div class="notif-bar" id="notif-bar"></div>
 
-  </main>
-</div>
-
-<script src="{{ url_for('static', filename='app.js') }}?v=nexus-v2"></script>
 <script>
-    function toggleCard(id) {
-      const el = document.getElementById(id);
-      el.style.display = el.style.display === 'none' ? 'block' : 'none';
+// ── NAVEGAÇÃO ──────────────────────────────────────────────────
+function navTo(sec){
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const el=document.getElementById('sec-'+sec);if(el)el.classList.add('active');
+  document.querySelectorAll(`.nav-item[data-sec="${sec}"]`).forEach(n=>n.classList.add('active'));
+  const loaders={catalogo:loadCatalogo,pedidos:loadPedidos,contatos:loadContatos,reunioes:loadReunioes,historico:loadHistorico};
+  if(loaders[sec])loaders[sec]();
+}
+
+// ── API ────────────────────────────────────────────────────────
+async function api(url,opts={}){
+  const r=await fetch(url,{headers:{'Content-Type':'application/json'},...opts});
+  const j=await r.json();if(!r.ok)throw new Error(j.mensagem||'Erro');return j;
+}
+function fmt(v){return 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2});}
+function fmtData(d){if(!d)return '-';return new Date(d).toLocaleDateString('pt-BR');}
+
+// ── NOTIF ──────────────────────────────────────────────────────
+function notif(msg,tipo='success'){
+  const bar=document.getElementById('notif-bar');
+  const el=document.createElement('div');el.className='notif notif-'+tipo;
+  const icons={success:'fa-check-circle',error:'fa-times-circle',warn:'fa-exclamation-triangle',party:'fa-star',info:'fa-bell'};
+  el.innerHTML=`<i class="fas ${icons[tipo]||'fa-info-circle'}"></i> ${msg}`;
+  bar.appendChild(el);setTimeout(()=>el.remove(),5000);
+}
+function setMsg(id,msg,ok=true){const el=document.getElementById(id);if(!el)return;el.textContent=msg;el.className='msg '+(ok?'ok':'err');setTimeout(()=>{el.textContent='';},4000);}
+
+// ── LOGOUT ─────────────────────────────────────────────────────
+async function logout(){await fetch('/api/logout',{method:'POST'});window.location.href='/';}
+
+// ── DASHBOARD ──────────────────────────────────────────────────
+let chartInst=null;
+async function loadDashboard(){
+  try{
+    const [pedidos,contatos]=await Promise.all([api('/api/pedidos'),api('/api/contatos')]);
+    document.getElementById('d-pedidos').textContent=pedidos.length;
+    document.getElementById('d-total').textContent=fmt(pedidos.reduce((s,p)=>s+Number(p.total||0),0));
+    document.getElementById('d-pendentes').textContent=pedidos.filter(p=>p.status==='pendente').length;
+    document.getElementById('d-contatos').textContent=contatos.length;
+    // Últimos 5 pedidos
+    const tb=document.getElementById('tb-ultimos-pedidos');
+    const ults=pedidos.slice(0,5);
+    tb.innerHTML=ults.length?ults.map(p=>`<tr><td><b>#${p.id}</b></td><td>${p.empresa_nome||'-'}</td><td>${fmtData(p.data||p.criado_em)}</td><td style="color:var(--accent)">${fmt(p.total)}</td><td><span class="badge badge-${p.status||'pendente'}">${(p.status||'pendente').toUpperCase()}</span></td></tr>`).join(''):'<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:2rem">Nenhum pedido</td></tr>';
+  }catch(e){console.error(e);}
+  loadGrafico('mes');
+}
+
+async function loadGrafico(periodo){
+  ['semana','mes'].forEach(p=>{const b=document.getElementById('btn-'+p);if(b)b.className='btn btn-sm '+(p===periodo?'btn-primary':'btn-outline');});
+  try{
+    const pedidos=await api('/api/pedidos');
+    const hoje=new Date();let labels=[],data=[];
+    if(periodo==='semana'){
+      const dias=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+      labels=Array.from({length:7},(_,i)=>{const d=new Date(hoje);d.setDate(hoje.getDate()-6+i);return dias[d.getDay()];});
+      data=Array(7).fill(0);
+      pedidos.forEach(p=>{const d=new Date(p.criado_em||p.data);const diff=Math.round((hoje-d)/86400000);if(diff>=0&&diff<7)data[6-diff]+=Number(p.total||0);});
+    }else{
+      labels=Array.from({length:30},(_,i)=>{const d=new Date(hoje);d.setDate(hoje.getDate()-29+i);return d.getDate()+'/'+(String(d.getMonth()+1).padStart(2,'0'));});
+      data=Array(30).fill(0);
+      pedidos.forEach(p=>{const d=new Date(p.criado_em||p.data);const diff=Math.round((hoje-d)/86400000);if(diff>=0&&diff<30)data[29-diff]+=Number(p.total||0);});
     }
+    if(chartInst)chartInst.destroy();
+    const ctx=document.getElementById('chart-compras').getContext('2d');
+    chartInst=new Chart(ctx,{type:'line',data:{labels,datasets:[{label:'Compras (R$)',data,backgroundColor:'rgba(16,185,129,0.15)',borderColor:'#10b981',borderWidth:2,tension:0.4,fill:true,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#808090',font:{size:11}},grid:{color:'rgba(255,255,255,0.03)'}},y:{ticks:{color:'#808090',font:{size:11},callback:v=>'R$'+v},grid:{color:'rgba(255,255,255,0.05)'}}}}});
+  }catch(e){}
+}
 
-    const originalNavTo = window.navTo;
-    window.navTo = function (section) {
-      originalNavTo(section);
-      if (section === 'catalogo') loadCatalogoFornecedores();
-    };
+// ── CATÁLOGO ───────────────────────────────────────────────────
+async function loadCatalogo(){
+  try{
+    const forns=await api('/api/catalogo/fornecedores');
+    const grid=document.getElementById('grid-fornecedores');
+    grid.innerHTML=forns.length?forns.map(f=>`
+      <div class="forn-card" onclick="verProdutos(${f.id},'${f.nome.replace(/'/g,"\\'")}')">
+        <div style="width:48px;height:48px;border-radius:14px;background:var(--accent-g);display:flex;align-items:center;justify-content:center;margin-bottom:1rem">
+          <i class="fas fa-store" style="color:var(--accent);font-size:1.2rem"></i>
+        </div>
+        <div style="font-size:1rem;font-weight:700;margin-bottom:6px">${f.nome}</div>
+        <div style="font-size:0.8rem;color:var(--muted);margin-bottom:1rem"><i class="fas fa-location-dot"></i> ${f.endereco||'Acesso Remoto'}</div>
+        <button class="btn btn-primary btn-sm" style="width:100%"><i class="fas fa-arrow-right"></i> Ver Catálogo</button>
+      </div>`).join(''):'<div style="color:var(--muted);padding:2rem;text-align:center;grid-column:1/-1">Nenhum fornecedor disponível</div>';
+  }catch(e){console.error(e);}
+}
 
-    async function loadCatalogoFornecedores() {
-      try {
-        const forns = await api('/api/catalogo/fornecedores');
-        const grid = document.getElementById('grid-fornecedores');
-        grid.innerHTML = '';
-        forns.forEach(f => {
-          grid.innerHTML += `
-            <div class="card stat-card" style="cursor:pointer;" onclick="loadProdutosFornecedor('${f.id}', '${f.nome}')">
-              <div style="font-size: 1.3rem; font-weight: 800;" class="text-gradient">${f.nome}</div>
-              <div style="font-size: 0.8rem; color: var(--muted); margin-top: 10px;">${f.endereco || 'Acesso Remoto'}</div>
-              <i class="fas fa-building"></i>
-              <div style="margin-top: 1.5rem;"><span class="btn btn-outline" style="font-size: 0.7rem; padding: 6px 12px;">ACESSAR</span></div>
-            </div>
-          `;
-        });
-        fecharProdutos();
-      } catch (e) { console.error(e) }
-    }
+async function verProdutos(id,nome){
+  document.getElementById('view-fornecedores').style.display='none';
+  const vP=document.getElementById('view-produtos');vP.style.display='block';
+  document.getElementById('nome-forn-sel').textContent=nome;
+  const grid=document.getElementById('grid-produtos');
+  grid.innerHTML='<div style="color:var(--muted);padding:1rem">Carregando...</div>';
+  try{
+    const prods=await api(`/api/catalogo/fornecedores/${id}/produtos`);
+    grid.innerHTML=prods.length?prods.map(p=>{
+      const esg=p.quantidade<=0;
+      const img=p.imagem?`<img src="/static/uploads/${p.imagem}" style="width:100%;height:140px;object-fit:contain;border-radius:10px;margin-bottom:12px;background:#fff">`:`<div style="height:100px;border-radius:10px;background:rgba(255,255,255,0.02);display:flex;align-items:center;justify-content:center;margin-bottom:12px"><i class="fas fa-image" style="font-size:2rem;opacity:0.15"></i></div>`;
+      const tempos=[
+        p.tempo_preparo?`⏱ Preparo: ${p.tempo_preparo} ${p.tempo_preparo_unidade||'min'}`:'',
+        p.tempo_entrega?`🚚 Entrega: ${p.tempo_entrega} ${p.tempo_entrega_unidade||'min'}`:''
+      ].filter(Boolean).join(' · ');
+      return`<div class="prod-card">
+        ${img}
+        <div style="font-weight:700;margin-bottom:4px">${p.nome}</div>
+        ${p.descricao?`<div style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;line-height:1.4">${p.descricao}</div>`:''}
+        ${tempos?`<div style="font-size:0.75rem;color:var(--amber);margin-bottom:8px">${tempos}</div>`:''}
+        <div style="font-size:1.25rem;font-weight:800;color:var(--accent);margin-top:auto;margin-bottom:6px">${fmt(p.preco)}</div>
+        <div style="font-size:0.78rem;color:var(--muted);margin-bottom:10px">${esg?'❌ Esgotado':p.quantidade+' disponíveis'}</div>
+        <button class="btn btn-primary" style="width:100%" ${esg?'disabled':''} onclick="comprar(${id},'${p.id}','${p.nome.replace(/'/g,"\\'")}',${p.quantidade})">
+          ${esg?'<i class="fas fa-times"></i> Esgotado':'<i class="fas fa-cart-plus"></i> Fazer Pedido'}
+        </button>
+      </div>`;
+    }).join(''):'<div style="color:var(--muted);text-align:center;padding:2rem;grid-column:1/-1">Nenhum produto disponível</div>';
+  }catch(e){grid.innerHTML='<div style="color:var(--red);padding:1rem">Erro ao carregar produtos</div>';}
+}
 
-    function fecharProdutos() { document.getElementById('area-produtos-fornecedor').style.display = 'none'; }
+function voltarFornecedores(){
+  document.getElementById('view-produtos').style.display='none';
+  document.getElementById('view-fornecedores').style.display='block';
+}
 
-    async function loadProdutosFornecedor(id, nomeFornecedor) {
-      try {
-        const prods = await api(`/api/catalogo/fornecedores/${id}/produtos`);
-        document.getElementById('area-produtos-fornecedor').style.display = 'block';
-        document.getElementById('nome-fornecedor-selecionado').innerHTML = nomeFornecedor;
-        const grid = document.getElementById('grid-produtos-fornecedor');
-        grid.innerHTML = prods.length ? '' : '<div style="grid-column: 1/-1; text-align:center; color:var(--muted); padding:2rem;">Sem itens disponíveis.</div>';
+async function comprar(fornId,prodId,nomeProd,maxQtd){
+  const qStr=prompt(`Quantidade de "${nomeProd}" (Máx: ${maxQtd}):`);
+  if(!qStr)return;
+  const qtd=parseInt(qStr);
+  if(isNaN(qtd)||qtd<=0||qtd>maxQtd){notif('Quantidade inválida','error');return;}
+  try{
+    await api('/api/cliente/comprar',{method:'POST',body:JSON.stringify({fornecedor_id:fornId,produto_id:prodId,quantidade:qtd})});
+    notif(`🎉 Pedido de ${qtd}x "${nomeProd}" realizado!`,'party');
+    verProdutos(fornId,document.getElementById('nome-forn-sel').textContent);
+    loadDashboard();
+  }catch(ex){notif('Erro: '+ex.message,'error');}
+}
 
-        prods.forEach(p => {
-          const isEsgotado = p.quantidade <= 0;
-          const imgHtml = p.imagem
-            ? `<div style="height: 160px; border-radius: 12px; margin-bottom: 15px; overflow: hidden;"><img src="/static/uploads/${p.imagem}" style="width: 100%; height: 100%; object-fit: contain;"></div>`
-            : `<div style="height: 160px; border-radius: 12px; margin-bottom: 15px; background: rgba(255,255,255,0.01); display: flex; align-items: center; justify-content: center;"><i class="fas fa-image" style="font-size: 2rem; color: var(--border);"></i></div>`;
+// ── PEDIDOS ────────────────────────────────────────────────────
+async function loadPedidos(){
+  try{
+    const pedidos=await api('/api/pedidos');
+    const tb=document.getElementById('tb-pedidos');
+    tb.innerHTML=pedidos.length?pedidos.map(p=>`
+      <tr>
+        <td><b>#${p.id}</b></td>
+        <td>${p.empresa_nome||p.cliente_nome||'-'}</td>
+        <td>${fmtData(p.data||p.criado_em)}</td>
+        <td style="color:var(--accent)">${fmt(p.total)}</td>
+        <td><span class="badge badge-${p.status||'pendente'}">${(p.status||'pendente').toUpperCase()}</span></td>
+      </tr>`).join(''):'<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:2rem">Nenhum pedido realizado</td></tr>';
+  }catch(e){}
+}
 
-          grid.innerHTML += `
-            <div class="card" style="padding: 1.25rem;">
-              ${imgHtml}
-              <div style="font-weight: 700; margin-bottom: 10px;">${p.nome}</div>
-              <div style="font-size: 1.2rem; font-weight: 800; color: var(--accent);">${fmt(p.preco)}</div>
-              <button class="btn btn-primary" style="width: 100%; margin-top: 1.5rem;" ${isEsgotado ? 'disabled' : ''} onclick="comprarProduto('${id}', '${p.id}', '${p.nome}', ${p.quantidade})">
-                ${isEsgotado ? 'ESGOTADO' : 'PEDIR AGORA'}
-              </button>
-            </div>
-          `;
-        });
-      } catch (e) { console.error(e) }
-    }
+// ── CONTATOS ───────────────────────────────────────────────────
+async function loadContatos(){
+  try{
+    const c=await api('/api/contatos');
+    const tb=document.getElementById('tb-contatos');
+    tb.innerHTML=c.length?c.map(c=>`<tr><td><b>${c.nome}</b></td><td>${c.documento||'-'}</td><td>${c.email||'-'}</td><td>${c.telefone||'-'}</td><td><span class="badge badge-ok">${c.tipo||'-'}</span></td><td><button class="btn btn-sm btn-danger" onclick="delContato(${c.id})"><i class="fas fa-trash"></i></button></td></tr>`).join(''):'<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:2rem">Nenhum parceiro</td></tr>';
+  }catch(e){}
+}
+async function addContato(e){
+  e.preventDefault();const fd=new FormData(e.target);
+  try{await api('/api/contatos',{method:'POST',body:JSON.stringify(Object.fromEntries(fd))});setMsg('msg-contato','✅ Parceiro adicionado!',true);e.target.reset();loadContatos();}
+  catch(ex){setMsg('msg-contato','❌ '+ex.message,false);}
+}
+async function delContato(id){
+  if(!confirm('Remover parceiro?'))return;
+  try{await api(`/api/contatos/${id}`,{method:'DELETE'});notif('Removido.','success');loadContatos();}catch(ex){notif('Erro','error');}
+}
 
-    async function comprarProduto(fornId, prodId, nomeProd, maxQtd) {
-      const qStr = prompt(`Quantidade de "${nomeProd}" (Máx: ${maxQtd}):`);
-      if (!qStr) return;
-      const qtd = parseInt(qStr);
-      if (isNaN(qtd) || qtd <= 0 || qtd > maxQtd) { alert("Inválido."); return; }
-      try {
-        await api('/api/cliente/comprar', { method: 'POST', body: JSON.stringify({ fornecedor_id: fornId, produto_id: prodId, quantidade: qtd }) });
-        alert('Pedido realizado!');
-        loadProdutosFornecedor(fornId, ''); 
-        loadPedidos();
-      } catch (e) { alert(e.message); }
-    }
+// ── REUNIÕES ───────────────────────────────────────────────────
+async function loadReunioes(){
+  try{
+    const r=await api('/api/reunioes');
+    const tb=document.getElementById('tb-reunioes');
+    const agora=new Date();
+    tb.innerHTML=r.length?r.map(r=>{
+      const dt=r.data_hora?new Date(r.data_hora):null;
+      const diffH=dt?(dt-agora)/3600000:null;
+      let alerta='';
+      if(diffH!==null&&diffH>0&&diffH<=3)alerta='<span style="color:var(--amber);font-size:0.75rem;margin-left:6px">⚠️ Em breve!</span>';
+      return`<tr>
+        <td><b>${r.titulo}</b>${alerta}</td>
+        <td>${dt?dt.toLocaleString('pt-BR'):'-'}</td>
+        <td>${r.local||'-'}</td>
+        <td><span class="badge badge-${r.status||'agendada'}">${r.status||'agendada'}</span></td>
+        <td><button class="btn btn-sm btn-danger" onclick="delReuniao(${r.id})"><i class="fas fa-trash"></i></button></td>
+      </tr>`;
+    }).join(''):'<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:2rem">Nenhuma reunião</td></tr>';
+  }catch(e){}
+}
+async function addReuniao(e){
+  e.preventDefault();const fd=new FormData(e.target);
+  try{await api('/api/reunioes',{method:'POST',body:JSON.stringify({titulo:fd.get('titulo'),data_hora:fd.get('data_hora'),local:fd.get('local'),descricao:fd.get('descricao')})});setMsg('msg-reuniao','✅ Agendado!',true);e.target.reset();loadReunioes();}
+  catch(ex){setMsg('msg-reuniao','❌ '+ex.message,false);}
+}
+async function delReuniao(id){
+  if(!confirm('Excluir?'))return;
+  try{await api(`/api/reunioes/${id}`,{method:'DELETE'});notif('Excluída.','success');loadReunioes();}catch(ex){notif('Erro','error');}
+}
+
+// ── HISTÓRICO ──────────────────────────────────────────────────
+async function loadHistorico(){
+  try{
+    const pedidos=await api('/api/pedidos');
+    const tb=document.getElementById('tb-historico');
+    tb.innerHTML=pedidos.length?pedidos.map(p=>`<tr><td>Pedido #${p.id} realizado</td><td>${fmtData(p.data||p.criado_em)}</td><td style="color:var(--accent)">${fmt(p.total)}</td><td>${p.cliente_nome||''}</td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:2rem">Sem registros</td></tr>';
+  }catch(e){}
+}
+
+// ── INIT ───────────────────────────────────────────────────────
+loadDashboard();
 </script>
 </body>
 </html>
