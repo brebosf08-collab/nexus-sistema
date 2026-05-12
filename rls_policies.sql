@@ -2,11 +2,11 @@
 -- NEXUS — Setup Completo do Banco de Dados
 -- Execute no SQL Editor do Supabase
 -- ================================================
-
+ 
 -- ================================================
 -- 1. CRIAR TABELAS (caso não existam)
 -- ================================================
-
+ 
 CREATE TABLE IF NOT EXISTS empresas (
     id SERIAL PRIMARY KEY,
     nome VARCHAR(255) NOT NULL,
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS empresas (
     ativo BOOLEAN DEFAULT TRUE,
     criado_em TIMESTAMP DEFAULT NOW()
 );
-
+ 
 CREATE TABLE IF NOT EXISTS usuarios (
     id SERIAL PRIMARY KEY,
     auth_id UUID,
@@ -30,14 +30,14 @@ CREATE TABLE IF NOT EXISTS usuarios (
     ativo BOOLEAN DEFAULT TRUE,
     criado_em TIMESTAMP DEFAULT NOW()
 );
-
+ 
 CREATE TABLE IF NOT EXISTS categorias (
     id SERIAL PRIMARY KEY,
     empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE,
     nome VARCHAR(255) NOT NULL,
     criado_em TIMESTAMP DEFAULT NOW()
 );
-
+ 
 CREATE TABLE IF NOT EXISTS produtos (
     id SERIAL PRIMARY KEY,
     empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE,
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS produtos (
     ativo BOOLEAN DEFAULT TRUE,
     criado_em TIMESTAMP DEFAULT NOW()
 );
-
+ 
 -- Tabela de histórico de movimentações de estoque
 -- (chamada 'historico' no sistema, NÃO 'estoque_movimentos')
 CREATE TABLE IF NOT EXISTS historico (
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS historico (
     observacoes TEXT,
     data_hora TIMESTAMP DEFAULT NOW()
 );
-
+ 
 CREATE TABLE IF NOT EXISTS vendedores (
     id SERIAL PRIMARY KEY,
     empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE,
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS vendedores (
     ativo BOOLEAN DEFAULT TRUE,
     criado_em TIMESTAMP DEFAULT NOW()
 );
-
+ 
 CREATE TABLE IF NOT EXISTS pedidos (
     id SERIAL PRIMARY KEY,
     empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE,
@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS pedidos (
     observacoes TEXT,
     criado_em TIMESTAMP DEFAULT NOW()
 );
-
+ 
 CREATE TABLE IF NOT EXISTS itens_pedido (
     id SERIAL PRIMARY KEY,
     pedido_id INTEGER REFERENCES pedidos(id) ON DELETE CASCADE,
@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS itens_pedido (
     preco_unitario NUMERIC(12,2) NOT NULL,
     subtotal NUMERIC(12,2) NOT NULL
 );
-
+ 
 CREATE TABLE IF NOT EXISTS reunioes (
     id SERIAL PRIMARY KEY,
     empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE,
@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS reunioes (
     status VARCHAR(50) DEFAULT 'agendada',
     criado_em TIMESTAMP DEFAULT NOW()
 );
-
+ 
 CREATE TABLE IF NOT EXISTS contatos (
     id SERIAL PRIMARY KEY,
     empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE,
@@ -123,7 +123,7 @@ CREATE TABLE IF NOT EXISTS contatos (
     tipo VARCHAR(50) DEFAULT 'cliente',
     criado_em TIMESTAMP DEFAULT NOW()
 );
-
+ 
 CREATE TABLE IF NOT EXISTS avisos (
     id SERIAL PRIMARY KEY,
     empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE,
@@ -136,7 +136,7 @@ CREATE TABLE IF NOT EXISTS avisos (
     data_criacao TIMESTAMP DEFAULT NOW(),
     data_leitura TIMESTAMP
 );
-
+ 
 CREATE TABLE IF NOT EXISTS perfil_loja (
     id SERIAL PRIMARY KEY,
     empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE UNIQUE,
@@ -155,11 +155,11 @@ CREATE TABLE IF NOT EXISTS perfil_loja (
     data_criacao TIMESTAMP DEFAULT NOW(),
     data_atualizacao TIMESTAMP DEFAULT NOW()
 );
-
+ 
 -- ================================================
 -- 2. ÍNDICES PARA PERFORMANCE
 -- ================================================
-
+ 
 CREATE INDEX IF NOT EXISTS idx_produtos_empresa    ON produtos(empresa_id);
 CREATE INDEX IF NOT EXISTS idx_historico_empresa   ON historico(empresa_id);
 CREATE INDEX IF NOT EXISTS idx_historico_produto   ON historico(produto_id);
@@ -175,11 +175,11 @@ CREATE INDEX IF NOT EXISTS idx_avisos_empresa      ON avisos(empresa_id);
 CREATE INDEX IF NOT EXISTS idx_avisos_lido         ON avisos(lido);
 CREATE INDEX IF NOT EXISTS idx_perfil_loja_empresa ON perfil_loja(empresa_id);
 CREATE INDEX IF NOT EXISTS idx_usuarios_login      ON usuarios(login);
-
+ 
 -- ================================================
 -- 3. POLÍTICAS DE SEGURANÇA (RLS)
 -- ================================================
-
+ 
 -- empresas
 ALTER TABLE empresas ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "rls_empresas_select" ON empresas;
@@ -188,7 +188,7 @@ DROP POLICY IF EXISTS "rls_empresas_update" ON empresas;
 CREATE POLICY "rls_empresas_select" ON empresas FOR SELECT USING (true);
 CREATE POLICY "rls_empresas_insert" ON empresas FOR INSERT WITH CHECK (true);
 CREATE POLICY "rls_empresas_update" ON empresas FOR UPDATE USING (true);
-
+ 
 -- usuarios
 ALTER TABLE usuarios ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "rls_usuarios_select" ON usuarios;
@@ -197,7 +197,7 @@ DROP POLICY IF EXISTS "rls_usuarios_update" ON usuarios;
 CREATE POLICY "rls_usuarios_select" ON usuarios FOR SELECT USING (true);
 CREATE POLICY "rls_usuarios_insert" ON usuarios FOR INSERT WITH CHECK (true);
 CREATE POLICY "rls_usuarios_update" ON usuarios FOR UPDATE USING (true);
-
+ 
 -- categorias
 ALTER TABLE categorias ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "rls_categorias_select" ON categorias;
@@ -208,7 +208,7 @@ CREATE POLICY "rls_categorias_select" ON categorias FOR SELECT USING (true);
 CREATE POLICY "rls_categorias_insert" ON categorias FOR INSERT WITH CHECK (true);
 CREATE POLICY "rls_categorias_update" ON categorias FOR UPDATE USING (true);
 CREATE POLICY "rls_categorias_delete" ON categorias FOR DELETE USING (true);
-
+ 
 -- produtos
 ALTER TABLE produtos ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "rls_produtos_select" ON produtos;
@@ -219,14 +219,14 @@ CREATE POLICY "rls_produtos_select" ON produtos FOR SELECT USING (true);
 CREATE POLICY "rls_produtos_insert" ON produtos FOR INSERT WITH CHECK (true);
 CREATE POLICY "rls_produtos_update" ON produtos FOR UPDATE USING (true);
 CREATE POLICY "rls_produtos_delete" ON produtos FOR DELETE USING (true);
-
+ 
 -- historico (movimentações de estoque)
 ALTER TABLE historico ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "rls_historico_select" ON historico;
 DROP POLICY IF EXISTS "rls_historico_insert" ON historico;
 CREATE POLICY "rls_historico_select" ON historico FOR SELECT USING (true);
 CREATE POLICY "rls_historico_insert" ON historico FOR INSERT WITH CHECK (true);
-
+ 
 -- vendedores
 ALTER TABLE vendedores ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "rls_vendedores_select" ON vendedores;
@@ -237,7 +237,7 @@ CREATE POLICY "rls_vendedores_select" ON vendedores FOR SELECT USING (true);
 CREATE POLICY "rls_vendedores_insert" ON vendedores FOR INSERT WITH CHECK (true);
 CREATE POLICY "rls_vendedores_update" ON vendedores FOR UPDATE USING (true);
 CREATE POLICY "rls_vendedores_delete" ON vendedores FOR DELETE USING (true);
-
+ 
 -- pedidos
 ALTER TABLE pedidos ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "rls_pedidos_select" ON pedidos;
@@ -246,14 +246,14 @@ DROP POLICY IF EXISTS "rls_pedidos_update" ON pedidos;
 CREATE POLICY "rls_pedidos_select" ON pedidos FOR SELECT USING (true);
 CREATE POLICY "rls_pedidos_insert" ON pedidos FOR INSERT WITH CHECK (true);
 CREATE POLICY "rls_pedidos_update" ON pedidos FOR UPDATE USING (true);
-
+ 
 -- itens_pedido
 ALTER TABLE itens_pedido ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "rls_itens_pedido_select" ON itens_pedido;
 DROP POLICY IF EXISTS "rls_itens_pedido_insert" ON itens_pedido;
 CREATE POLICY "rls_itens_pedido_select" ON itens_pedido FOR SELECT USING (true);
 CREATE POLICY "rls_itens_pedido_insert" ON itens_pedido FOR INSERT WITH CHECK (true);
-
+ 
 -- reunioes
 ALTER TABLE reunioes ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "rls_reunioes_select" ON reunioes;
@@ -264,7 +264,7 @@ CREATE POLICY "rls_reunioes_select" ON reunioes FOR SELECT USING (true);
 CREATE POLICY "rls_reunioes_insert" ON reunioes FOR INSERT WITH CHECK (true);
 CREATE POLICY "rls_reunioes_update" ON reunioes FOR UPDATE USING (true);
 CREATE POLICY "rls_reunioes_delete" ON reunioes FOR DELETE USING (true);
-
+ 
 -- contatos
 ALTER TABLE contatos ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "rls_contatos_select" ON contatos;
@@ -275,7 +275,7 @@ CREATE POLICY "rls_contatos_select" ON contatos FOR SELECT USING (true);
 CREATE POLICY "rls_contatos_insert" ON contatos FOR INSERT WITH CHECK (true);
 CREATE POLICY "rls_contatos_update" ON contatos FOR UPDATE USING (true);
 CREATE POLICY "rls_contatos_delete" ON contatos FOR DELETE USING (true);
-
+ 
 -- avisos
 ALTER TABLE avisos ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "rls_avisos_select" ON avisos;
@@ -286,7 +286,7 @@ CREATE POLICY "rls_avisos_select" ON avisos FOR SELECT USING (true);
 CREATE POLICY "rls_avisos_insert" ON avisos FOR INSERT WITH CHECK (true);
 CREATE POLICY "rls_avisos_update" ON avisos FOR UPDATE USING (true);
 CREATE POLICY "rls_avisos_delete" ON avisos FOR DELETE USING (true);
-
+ 
 -- perfil_loja
 ALTER TABLE perfil_loja ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "rls_perfil_select" ON perfil_loja;
@@ -295,11 +295,11 @@ DROP POLICY IF EXISTS "rls_perfil_update" ON perfil_loja;
 CREATE POLICY "rls_perfil_select" ON perfil_loja FOR SELECT USING (true);
 CREATE POLICY "rls_perfil_insert" ON perfil_loja FOR INSERT WITH CHECK (true);
 CREATE POLICY "rls_perfil_update" ON perfil_loja FOR UPDATE USING (true);
-
+ 
 -- ================================================
 -- 4. VERIFICAÇÃO FINAL
 -- ================================================
-
+ 
 SELECT 
     table_name,
     CASE WHEN table_name IN (
