@@ -101,8 +101,8 @@
     <div class="grid-produtos">
       {% for p in produtos %}
         {% set esgotado = p.quantidade <= 0 %}
-        <div class="produto-card {% if esgotado %}esgotado-card{% endif %}">
-          {% if esgotado %}<div class="badge-esgotado">ESGOTADO</div>{% endif %}
+        <div class="produto-card {% if esgotado %}esgotado-card{% endif %}" data-produto-id="{{ p.id }}">
+          <div class="badge-esgotado" style="display: {% if esgotado %}flex{% else %}none{% endif %};">ESGOTADO</div>
           
           {% if p.imagem %}
             <div class="img-wrap">
@@ -121,12 +121,51 @@
             <div class="p-preco">
               R$ {{ "%.2f"|format(p.preco)|replace('.', ',') }}
             </div>
-            {% if not esgotado %}<div class="p-qtd">{{ p.quantidade }} un.</div>{% endif %}
+            <div class="p-qtd produto-qty">
+              {% if esgotado %}Esgotado{% else %}{{ p.quantidade }} un.{% endif %}
+            </div>
           </div>
+          <button class="btn btn-primary" style="width:100%; margin-top:16px;" {% if esgotado %}disabled{% endif %} onclick="abrirPedidoModal({ id: {{ p.id }}, nome: '{{ p.nome.replace("'", "\\'") }}', preco: {{ p.preco }}, quantidade: {{ p.quantidade }} })">
+            {% if esgotado %}<i class="fas fa-times"></i> Esgotado{% else %}<i class="fas fa-cart-plus"></i> Fazer Pedido{% endif %}
+          </button>
         </div>
       {% endfor %}
     </div>
   {% endif %}
+
+  <div id="modal-pedido" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:20;padding:2rem;overflow:auto;">
+    <div style="max-width:520px;margin:0 auto;background:#09090b;border:1px solid rgba(255,255,255,0.08);border-radius:24px;padding:2rem;position:relative;">
+      <button onclick="fecharPedidoModal()" style="position:absolute;top:18px;right:18px;border:none;background:rgba(255,255,255,0.08);color:#fff;border-radius:999px;width:36px;height:36px;cursor:pointer;"><i class="fas fa-times"></i></button>
+      <h2 style="margin-bottom:1rem;">Confirmar pedido</h2>
+      <div style="margin-bottom:1rem;color:var(--muted);" id="modal-pedido-produto"></div>
+      <div style="display:grid;gap:1rem;">
+        <label style="display:flex;flex-direction:column;gap:0.5rem;color:#fff;font-weight:600;">Quantidade
+          <input id="modal-quantidade" type="number" min="1" value="1" style="border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:0.9rem;background:rgba(255,255,255,0.03);color:#fff;" />
+        </label>
+        <label style="display:flex;flex-direction:column;gap:0.5rem;color:#fff;font-weight:600;">Data de entrega prevista
+          <input id="modal-data-entrega" type="date" style="border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:0.9rem;background:rgba(255,255,255,0.03);color:#fff;" />
+        </label>
+        <label style="display:flex;flex-direction:column;gap:0.5rem;color:#fff;font-weight:600;">Forma de pagamento
+          <select id="modal-forma-pagamento" style="border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:0.9rem;background:rgba(255,255,255,0.03);color:#fff;">
+            <option value="PIX">PIX</option>
+            <option value="Cartão de Crédito">Cartão de Crédito</option>
+            <option value="Cartão de Débito">Cartão de Débito</option>
+            <option value="Boleto">Boleto</option>
+            <option value="Transferência">Transferência</option>
+            <option value="Dinheiro">Dinheiro</option>
+          </select>
+        </label>
+        <label style="display:flex;flex-direction:column;gap:0.5rem;color:#fff;font-weight:600;">Mensagem para o fornecedor
+          <textarea id="modal-mensagem-cliente" rows="4" placeholder="Agradecer pela atenção e deixar detalhes do pedido" style="border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:0.9rem;background:rgba(255,255,255,0.03);color:#fff;"></textarea>
+        </label>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+          <div style="color:var(--muted);font-size:0.95rem;">Cliente: {{ user_empresa or 'Visitante' }}</div>
+          <button class="btn btn-primary" onclick="enviarPedidoCliente()" id="btn-confirmar-pedido">Enviar pedido</button>
+        </div>
+      </div>
+      <div id="modal-pedido-msg" style="margin-top:1rem;color:#fbbf24;"></div>
+    </div>
+  </div>
 
   <div class="cta-container">
     <a href="/login" class="btn-nexus">
@@ -135,5 +174,106 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = 'https://gtctfqphvsczeenpysco.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_i7zHWTjev6I-vdCTbBgG7Q_p3qSDvti';
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+const fornecedorId = {{ fornecedor.id }};
+const userType = '{{ user_type or "" }}';
+const userEmpresa = '{{ user_empresa or "" }}';
+const userNome = '{{ user_nome or "" }}';
+let pedidoSelecionado = null;
+
+function atualizarCardProduto(prod) {
+  const card = document.querySelector(`[data-produto-id="${prod.id}"]`);
+  if (!card) return;
+  const esgotado = prod.quantidade <= 0;
+  const badge = card.querySelector('.badge-esgotado');
+  const qty = card.querySelector('.produto-qty');
+
+  card.classList.toggle('esgotado-card', esgotado);
+  if (badge) badge.style.display = esgotado ? 'flex' : 'none';
+  if (qty) qty.textContent = esgotado ? 'Esgotado' : `${prod.quantidade} un.`;
+}
+
+function abrirPedidoModal(produto) {
+  if (userType !== 'cliente') {
+    window.location.href = '/login';
+    return;
+  }
+
+  pedidoSelecionado = produto;
+  document.getElementById('modal-pedido-produto').textContent = `${produto.nome} — R$ ${produto.preco.toFixed(2).replace('.', ',')} (${produto.quantidade} disponíveis)`;
+  document.getElementById('modal-quantidade').value = 1;
+  document.getElementById('modal-data-entrega').value = '';
+  document.getElementById('modal-mensagem-cliente').value = '';
+  document.getElementById('modal-pedido-msg').textContent = '';
+  document.getElementById('modal-pedido').style.display = 'block';
+}
+
+function fecharPedidoModal() {
+  document.getElementById('modal-pedido').style.display = 'none';
+  pedidoSelecionado = null;
+}
+
+async function enviarPedidoCliente() {
+  if (!pedidoSelecionado) return;
+
+  const quantidade = parseInt(document.getElementById('modal-quantidade').value, 10) || 1;
+  const dataEntrega = document.getElementById('modal-data-entrega').value;
+  const mensagemCliente = document.getElementById('modal-mensagem-cliente').value.trim();
+
+  if (quantidade < 1) {
+    document.getElementById('modal-pedido-msg').textContent = 'Informe uma quantidade válida.';
+    return;
+  }
+
+  if (quantidade > pedidoSelecionado.quantidade) {
+    document.getElementById('modal-pedido-msg').textContent = 'Quantidade maior que o estoque disponível.';
+    return;
+  }
+
+  const payload = {
+    fornecedor_id: fornecedorId,
+    produto_id: pedidoSelecionado.id,
+    quantidade,
+    data_entrega: dataEntrega,
+    forma_pagamento: document.getElementById('modal-forma-pagamento').value || null,
+    mensagem_cliente: mensagemCliente
+  };
+
+  try {
+    const response = await fetch('/api/cliente/comprar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json();
+    if (result.sucesso) {
+      document.getElementById('modal-pedido-msg').textContent = 'Pedido enviado com sucesso!';
+      setTimeout(() => {
+        fecharPedidoModal();
+        window.location.reload();
+      }, 1200);
+    } else {
+      document.getElementById('modal-pedido-msg').textContent = result.mensagem || 'Erro ao criar pedido.';
+    }
+  } catch (error) {
+    document.getElementById('modal-pedido-msg').textContent = 'Erro de conexão ao enviar pedido.';
+  }
+}
+
+function subscribeVitrine() {
+  supabaseClient.channel(`realtime-vitrine-${fornecedorId}`)
+    .on('postgres_changes', { event:'*', schema:'public', table:'produtos', filter:`empresa_id=eq.${fornecedorId}` }, payload => {
+      const prod = payload.new || payload.old;
+      if (prod) atualizarCardProduto(prod);
+    })
+    .subscribe();
+}
+
+window.addEventListener('DOMContentLoaded', subscribeVitrine);
+</script>
 </body>
 </html>

@@ -290,22 +290,36 @@ def deletar_vendedor(empresa_id, vendedor_id):
 # PEDIDOS
 # ═══════════════════════════════════════════
 
-def criar_pedido(empresa_id, cliente_nome, data, itens, vendedor_id=None, observacoes='', cliente_id=None):
+def criar_pedido(empresa_id, cliente_nome, data, itens, vendedor_id=None, observacoes='', cliente_id=None, data_entrega=None, mensagem_cliente='', forma_pagamento=None, comissao_valor=0):
     try:
         total = sum(float(i['subtotal']) for i in itens)
         qtd_itens = sum(int(i['quantidade']) for i in itens)
         
         p_data = {
-            "empresa_id": empresa_id, "cliente_nome": cliente_nome, "vendedor_id": vendedor_id or None,
-            "data": data, "total": total, "quantidade_itens": qtd_itens, "observacoes": observacoes, "cliente_id": cliente_id
+            "empresa_id": empresa_id,
+            "cliente_nome": cliente_nome,
+            "vendedor_id": vendedor_id or None,
+            "data": data,
+            "data_entrega": data_entrega or None,
+            "forma_pagamento": forma_pagamento or None,
+            "total": total,
+            "quantidade_itens": qtd_itens,
+            "status": 'pendente',
+            "observacoes": observacoes,
+            "mensagem_cliente": mensagem_cliente,
+            "comissao_valor": float(comissao_valor or 0),
+            "cliente_id": cliente_id
         }
         res = supabase.table('pedidos').insert(p_data).execute()
         pedido_id = res.data[0]['id']
         
         for item in itens:
             supabase.table('itens_pedido').insert({
-                "pedido_id": pedido_id, "produto_id": item['produto_id'], "quantidade": int(item['quantidade']),
-                "preco_unitario": float(item['preco']), "subtotal": float(item['subtotal'])
+                "pedido_id": pedido_id,
+                "produto_id": item['produto_id'],
+                "quantidade": int(item['quantidade']),
+                "preco_unitario": float(item['preco']),
+                "subtotal": float(item['subtotal'])
             }).execute()
             
             # Atualizar estoque
@@ -314,7 +328,10 @@ def criar_pedido(empresa_id, cliente_nome, data, itens, vendedor_id=None, observ
                 nova_qtd = max(0, r.data[0]['quantidade'] - int(item['quantidade']))
                 supabase.table('produtos').update({'quantidade': nova_qtd}).eq('id', item['produto_id']).execute()
                 supabase.table('historico').insert({
-                    "empresa_id": empresa_id, "produto_id": item['produto_id'], "tipo": 'saida', "quantidade": int(item['quantidade']),
+                    "empresa_id": empresa_id,
+                    "produto_id": item['produto_id'],
+                    "tipo": 'saida',
+                    "quantidade": int(item['quantidade']),
                     "observacoes": f'Pedido #{pedido_id} - {cliente_nome}'
                 }).execute()
                 
@@ -356,6 +373,19 @@ def obter_pedido_detalhado(empresa_id, pedido_id):
 def atualizar_status_pedido(empresa_id, pedido_id, status):
     try:
         supabase.table('pedidos').update({'status': status}).eq('id', pedido_id).eq('empresa_id', empresa_id).execute()
+        return {'sucesso': True}
+    except Exception as e:
+        return {'sucesso': False, 'mensagem': str(e)}
+
+def atualizar_pedido(empresa_id, pedido_id, dados):
+    permitidos = ['status', 'vendedor_id', 'data_entrega', 'mensagem_cliente', 'observacoes', 'comissao_valor', 'forma_pagamento']
+    atualizacoes = {k: v for k, v in dados.items() if k in permitidos}
+    if not atualizacoes:
+        return {'sucesso': False, 'mensagem': 'Nada para atualizar'}
+    try:
+        if 'comissao_valor' in atualizacoes:
+            atualizacoes['comissao_valor'] = float(atualizacoes['comissao_valor'] or 0)
+        supabase.table('pedidos').update(atualizacoes).eq('id', pedido_id).eq('empresa_id', empresa_id).execute()
         return {'sucesso': True}
     except Exception as e:
         return {'sucesso': False, 'mensagem': str(e)}

@@ -130,6 +130,19 @@ def painel_cliente():
     return render_template('cliente.html', empresa=empresa, usuario=session.get('user_nome'))
 
 
+@app.route('/relatorios')
+@login_required
+def relatorios():
+    tipo = session.get('empresa_tipo')
+    if tipo not in ('fornecedor', 'cliente'):
+        return redirect(url_for('login_page'))
+    empresa = obter_empresa(get_empresa_id())
+    if not empresa:
+        session.clear()
+        return redirect(url_for('login_page'))
+    return render_template('relatorios.html', empresa=empresa, usuario=session.get('user_nome'))
+
+
 @app.route('/loja/<int:forn_id>')
 def vitrine_fornecedor(forn_id):
     """Página pública da loja/vitrine do fornecedor"""
@@ -137,7 +150,11 @@ def vitrine_fornecedor(forn_id):
     if not fornecedor or fornecedor.get('tipo') != 'fornecedor':
         abort(404)
     produtos = obter_produtos(forn_id)
-    return render_template('vitrine.html', fornecedor=fornecedor, produtos=produtos)
+    return render_template(
+        'vitrine.html', fornecedor=fornecedor, produtos=produtos,
+        user_type=session.get('empresa_tipo'), user_nome=session.get('user_nome'),
+        user_empresa=session.get('empresa_nome')
+    )
 
 
 # ═══════════════════════════════════════════
@@ -465,6 +482,10 @@ def api_criar_pedido():
     itens = data.get('itens') or []
     vendedor_id = data.get('vendedor_id')
     obs = data.get('observacoes', '')
+    data_entrega = (data.get('data_entrega') or '').strip() or None
+    mensagem_cliente = (data.get('mensagem_cliente') or '').strip()
+    forma_pagamento = (data.get('forma_pagamento') or '').strip() or None
+    comissao_valor = data.get('comissao_valor', 0)
 
     if not cliente:
         return jsonify({'sucesso': False, 'mensagem': 'Nome do cliente é obrigatório'}), 400
@@ -473,10 +494,27 @@ def api_criar_pedido():
     if not itens:
         return jsonify({'sucesso': False, 'mensagem': 'Adicione ao menos um item ao pedido'}), 400
 
-    r = criar_pedido(get_empresa_id(), cliente, data_pedido, itens, vendedor_id, obs)
+    r = criar_pedido(get_empresa_id(), cliente, data_pedido, itens, vendedor_id, obs,
+                    data_entrega=data_entrega, mensagem_cliente=mensagem_cliente,
+                    forma_pagamento=forma_pagamento,
+                    comissao_valor=comissao_valor)
     if not r.get('sucesso'):
         return jsonify(r), 400
     return jsonify(r), 201
+
+
+@app.route('/api/pedidos/<int:pid>', methods=['PUT'])
+@login_required
+def api_atualizar_pedido(pid):
+    if session.get('empresa_tipo') != 'fornecedor':
+        return jsonify({'sucesso': False, 'mensagem': 'Apenas fornecedor pode atualizar pedidos'}), 403
+    data = request.get_json(force=True, silent=True) or {}
+    if not data:
+        return jsonify({'sucesso': False, 'mensagem': 'Nenhum dado fornecido para atualização'}), 400
+    r = atualizar_pedido(get_empresa_id(), pid, data)
+    if not r.get('sucesso'):
+        return jsonify(r), 400
+    return jsonify(r)
 
 
 @app.route('/api/pedidos/<int:pid>', methods=['GET'])
@@ -629,6 +667,10 @@ def api_cliente_comprar():
     except:
         return jsonify({'sucesso': False, 'mensagem': 'Quantidade inválida'}), 400
 
+    data_entrega = (data.get('data_entrega') or '').strip() or None
+    mensagem_cliente = (data.get('mensagem_cliente') or '').strip()
+    forma_pagamento = (data.get('forma_pagamento') or '').strip() or None
+
     if qtd <= 0:
         return jsonify({'sucesso': False, 'mensagem': 'Quantidade deve ser maior que zero'}), 400
     
@@ -658,7 +700,16 @@ def api_cliente_comprar():
         cliente_nome_str = f"{cliente_empresa} ({session.get('user_nome', 'User')})"
         
         # Cria o pedido (o criar_pedido já desconta estoque e gera histórico)
-        r = criar_pedido(forn_id, cliente_nome_str, data_hoje, itens, cliente_id=get_empresa_id())
+        r = criar_pedido(
+            forn_id,
+            cliente_nome_str,
+            data_hoje,
+            itens,
+            cliente_id=get_empresa_id(),
+            data_entrega=data_entrega,
+            mensagem_cliente=mensagem_cliente,
+            forma_pagamento=forma_pagamento
+        )
         
         if r.get('sucesso'):
             return jsonify({'sucesso': True, 'mensagem': 'Pedido realizado com sucesso!'})

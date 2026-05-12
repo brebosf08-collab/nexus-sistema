@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relatórios — Nexus Sistema</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+  :root{--bg:#0f0f11;--surface:#18181c;--surface2:#222228;--border:#2a2a32;--accent:#6c63ff;--accent2:#00d4aa;--danger:#ff5c5c;--warning:#f5a623;--text:#f0f0f4;--muted:#8888a0;--radius:12px}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+  header{background:var(--surface);border-bottom:1px solid var(--border);padding:1rem 2rem;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .logo{font-size:18px;font-weight:600;letter-spacing:-.3px}.logo span{color:var(--accent)}
+  .header-right{display:flex;align-items:center;gap:8px}
+  .btn{padding:8px 16px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:var(--surface2);color:var(--text);transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+  .btn:hover{background:var(--border)}
+  .btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}.btn-primary:hover{opacity:.85;background:var(--accent)}
+  .btn-pdf{background:rgba(255,92,92,.15);border-color:rgba(255,92,92,.3);color:var(--danger)}.btn-pdf:hover{background:rgba(255,92,92,.25)}
+  .status-dot{width:8px;height:8px;border-radius:50%;background:#888;animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .tabs{display:flex;gap:4px;padding:1.5rem 2rem 0;border-bottom:1px solid var(--border);background:var(--surface)}
+  .tab{padding:9px 20px;border-radius:8px 8px 0 0;font-size:13px;font-weight:500;cursor:pointer;border:1px solid transparent;border-bottom:none;color:var(--muted);background:transparent;font-family:'DM Sans',sans-serif;transition:all .15s}
+  .tab.active{background:var(--bg);color:var(--text);border-color:var(--border)}
+  .tab:hover:not(.active){color:var(--text)}
+  main{padding:2rem;max-width:1280px;margin:0 auto}
+  .page{display:none}.page.active{display:block}
+  .filtros{display:flex;gap:10px;margin-bottom:1.5rem;flex-wrap:wrap;align-items:center}
+  .filtros label{font-size:13px;color:var(--muted)}
+  .filtros select,.filtros input[type=date]{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px}
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:1.5rem}
+  .mc{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem 1.5rem;position:relative;overflow:hidden;transition:border-color .2s}
+  .mc:hover{border-color:var(--accent)}.mc::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--ab,var(--accent))}
+  .ml{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+  .mv{font-size:26px;font-weight:600;line-height:1;margin-bottom:4px}
+  .ms{font-size:12px;color:var(--muted);font-family:'DM Mono',monospace}
+  .charts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px;margin-bottom:1.5rem}
+  .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem}
+  .chart-title{font-size:14px;font-weight:500;margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between}
+  .cbadge{font-size:11px;font-family:'DM Mono',monospace;background:var(--surface2);padding:3px 8px;border-radius:6px;color:var(--muted)}
+  .table-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:1.5rem}
+  .table-header{padding:1rem 1.5rem;border-bottom:1px solid var(--border);font-size:14px;font-weight:500;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .tw{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{background:var(--surface2);color:var(--muted);font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;padding:10px 16px;text-align:left;white-space:nowrap}
+  td{padding:11px 16px;border-bottom:1px solid var(--border);color:var(--text)}
+  tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
+  .sb{display:inline-block;font-size:11px;font-weight:500;padding:3px 10px;border-radius:20px;font-family:'DM Mono',monospace}
+  .s-pago{background:rgba(0,212,170,.15);color:var(--accent2)}.s-confirmado{background:rgba(108,99,255,.15);color:var(--accent)}.s-cancelado{background:rgba(255,92,92,.15);color:var(--danger)}.s-pendente{background:rgba(245,166,35,.15);color:var(--warning)}
+  .rank-list{display:flex;flex-direction:column;gap:8px}
+  .rank-item{background:var(--surface2);border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:12px}
+  .rn{font-size:12px;font-family:'DM Mono',monospace;color:var(--muted);min-width:18px}
+  .rname{flex:1;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
+  .rbar-w{width:100px;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+  .rbar{height:100%;border-radius:2px}
+  .rval{font-size:12px;font-family:'DM Mono',monospace;color:var(--accent2);min-width:90px;text-align:right}
+  .rcount{font-size:11px;color:var(--muted);min-width:52px;text-align:right}
+  .loading{text-align:center;padding:2.5rem;color:var(--muted);font-size:14px}
+  .spinner{width:28px;height:28px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 10px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Nexus <span>Sistema</span> — Relatórios</div>
+  <div class="header-right">
+    <div class="status-dot" id="statusDot"></div>
+    <button class="btn btn-pdf" onclick="exportarPDF()">⬇ Exportar PDF</button>
+    <button class="btn" onclick="carregarAtual()">↻ Atualizar</button>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab active" onclick="abrirTab('geral',this)">Visão geral</button>
+  <button class="tab" onclick="abrirTab('empresas',this)">Por empresa</button>
+  <button class="tab" onclick="abrirTab('vendedores',this)">Por vendedor</button>
+</div>
+
+<main>
+
+  <div class="page active" id="page-geral">
+    <div class="filtros">
+      <label>De</label><input type="date" id="g-ini">
+      <label>até</label><input type="date" id="g-fim">
+      <label>Status</label>
+      <select id="g-status">
+        <option value="">Todos</option>
+        <option value="pago">Pago</option>
+        <option value="confirmado">Confirmado</option>
+        <option value="cancelado">Cancelado</option>
+        <option value="pendente">Pendente</option>
+      </select>
+      <button class="btn btn-primary" onclick="carregarGeral()">Filtrar</button>
+    </div>
+    <div class="metrics">
+      <div class="mc" style="--ab:var(--accent2)"><div class="ml">Total em vendas</div><div class="mv" id="g-tv">—</div><div class="ms" id="g-sv">—</div></div>
+      <div class="mc" style="--ab:var(--accent)"><div class="ml">Pedidos</div><div class="mv" id="g-tp">—</div><div class="ms">no período</div></div>
+      <div class="mc" style="--ab:var(--warning)"><div class="ml">Ticket médio</div><div class="mv" id="g-tk">—</div><div class="ms">por pedido</div></div>
+      <div class="mc" style="--ab:var(--danger)"><div class="ml">Cancelados</div><div class="mv" id="g-tc">—</div><div class="ms" id="g-sc">—</div></div>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-card"><div class="chart-title">Vendas por mês <span class="cbadge">barras</span></div><canvas id="cVendas" height="220"></canvas></div>
+      <div class="chart-card"><div class="chart-title">Pedidos por status <span class="cbadge">pizza</span></div><canvas id="cStatus" height="220"></canvas></div>
+    </div>
+    <div class="table-card" id="tGeral">
+      <div class="table-header">Pedidos recentes <span class="cbadge" id="g-cnt">—</span></div>
+      <div class="loading"><div class="spinner"></div>Carregando...</div>
+    </div>
+  </div>
+
+  <div class="page" id="page-empresas">
+    <div class="filtros">
+      <label>De</label><input type="date" id="e-ini">
+      <label>até</label><input type="date" id="e-fim">
+      <button class="btn btn-primary" onclick="carregarEmpresas()">Filtrar</button>
+    </div>
+    <div class="metrics">
+      <div class="mc" style="--ab:var(--accent2)"><div class="ml">Empresas ativas</div><div class="mv" id="e-tot">—</div><div class="ms">com pedidos</div></div>
+      <div class="mc" style="--ab:var(--accent)"><div class="ml">Maior volume</div><div class="mv" id="e-mai">—</div><div class="ms" id="e-mnome">—</div></div>
+      <div class="mc" style="--ab:var(--warning)"><div class="ml">Média por empresa</div><div class="mv" id="e-med">—</div><div class="ms">em vendas</div></div>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-card"><div class="chart-title">Vendas por empresa <span class="cbadge">top 8</span></div><canvas id="cEmpresas" height="260"></canvas></div>
+      <div class="chart-card"><div class="chart-title">Ranking <span class="cbadge">top 10</span></div><div class="rank-list" id="rEmpresas"><div class="loading"><div class="spinner"></div>Carregando...</div></div></div>
+    </div>
+    <div class="table-card">
+      <div class="table-header">Detalhamento por empresa <span class="cbadge" id="e-cnt">—</span></div>
+      <div class="tw" id="tEmpresas"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
+    </div>
+  </div>
+
+  <div class="page" id="page-vendedores">
+    <div class="filtros">
+      <label>De</label><input type="date" id="v-ini">
+      <label>até</label><input type="date" id="v-fim">
+      <button class="btn btn-primary" onclick="carregarVendedores()">Filtrar</button>
+    </div>
+    <div class="metrics">
+      <div class="mc" style="--ab:var(--accent2)"><div class="ml">Vendedores ativos</div><div class="mv" id="v-tot">—</div><div class="ms">com vendas</div></div>
+      <div class="mc" style="--ab:var(--accent)"><div class="ml">Top vendedor</div><div class="mv" id="v-top">—</div><div class="ms" id="v-tnome">—</div></div>
+      <div class="mc" style="--ab:var(--warning)"><div class="ml">Média por vendedor</div><div class="mv" id="v-med">—</div><div class="ms">em vendas</div></div>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-card"><div class="chart-title">Vendas por vendedor <span class="cbadge">top 8</span></div><canvas id="cVendedores" height="260"></canvas></div>
+      <div class="chart-card"><div class="chart-title">Ranking <span class="cbadge">top 10</span></div><div class="rank-list" id="rVendedores"><div class="loading"><div class="spinner"></div>Carregando...</div></div></div>
+    </div>
+    <div class="table-card">
+      <div class="table-header">Detalhamento por vendedor <span class="cbadge" id="v-cnt">—</span></div>
+      <div class="tw" id="tVendedores"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  const SUPABASE_URL = 'https://gtctfqphvsczeenpysco.supabase.co'
+  const SUPABASE_ANON_KEY = 'sb_publishable_i7zHWTjev6I-vdCTbBgG7Q_p3qSDvti'
+
+  const { createClient } = supabase
+  const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  document.getElementById('statusDot').style.background = 'var(--accent2)'
+
+  let aba = 'geral'
+  let charts = {}
+
+  const hoje = new Date().toISOString().split('T')[0]
+  const seisAtras = new Date(); seisAtras.setMonth(seisAtras.getMonth()-6)
+  const s6 = seisAtras.toISOString().split('T')[0]
+  ;['g','e','v'].forEach(p=>{ document.getElementById(p+'-ini').value=s6; document.getElementById(p+'-fim').value=hoje })
+
+  const fmt = v => 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2})
+  const fmtK = v => v>=1000?'R$'+(v/1000).toFixed(1)+'k':'R$'+Math.round(v)
+  const sc = s => { const m={'pago':'pago','confirmado':'confirmado','cancelado':'cancelado','pendente':'pendente'}; return 'sb s-'+(m[s]||'pendente') }
+  const mNome = m => { const[y,mo]=m.split('-'); return ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][parseInt(mo)-1]+'/'+y.slice(2) }
+  const kd = id => { if(charts[id]){charts[id].destroy();delete charts[id]} }
+  const barOpts = (cb='var(--accent)', yFmt=true) => ({
+    responsive:true, plugins:{legend:{display:false}},
+    scales:{x:{ticks:{color:'#8888a0',maxRotation:30},grid:{color:'#2a2a32'}},y:{ticks:{color:'#8888a0',callback:yFmt?fmtK:undefined},grid:{color:'#2a2a32'}}}
+  })
+
+  function abrirTab(id, el){
+    aba=id
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'))
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'))
+    el.classList.add('active')
+    document.getElementById('page-'+id).classList.add('active')
+    carregarAtual()
+  }
+
+  function carregarAtual(){
+    if(aba==='geral') carregarGeral()
+    else if(aba==='empresas') carregarEmpresas()
+    else carregarVendedores()
+  }
+
+  async function carregarGeral(){
+    const ini=document.getElementById('g-ini').value, fim=document.getElementById('g-fim').value, status=document.getElementById('g-status').value
+    document.getElementById('tGeral').innerHTML='<div class="table-header">Pedidos recentes <span class="cbadge">—</span></div><div class="loading"><div class="spinner"></div>Carregando...</div>'
+
+    let q=db.from('pedidos').select('id,cliente_nome,data,total,quantidade_itens,status').order('data',{ascending:false})
+    if(ini) q=q.gte('data',ini); if(fim) q=q.lte('data',fim); if(status) q=q.eq('status',status)
+    const {data:p,error}=await q; if(error){console.error(error);return}
+
+    const tot=p.reduce((s,x)=>s+Number(x.total||0),0), canc=p.filter(x=>x.status==='cancelado'), tk=p.length?tot/p.length:0
+    document.getElementById('g-tv').textContent=fmt(tot)
+    document.getElementById('g-sv').textContent=p.length+' pedidos no período'
+    document.getElementById('g-tp').textContent=p.length
+    document.getElementById('g-tk').textContent=fmt(tk)
+    document.getElementById('g-tc').textContent=canc.length
+    document.getElementById('g-sc').textContent=p.length?((canc.length/p.length)*100).toFixed(1)+'% do total':'—'
+
+    const pm={};p.forEach(x=>{if(!x.data)return;const m=x.data.slice(0,7);pm[m]=(pm[m]||0)+Number(x.total||0)})
+    const meses=Object.keys(pm).sort()
+    kd('v'); charts['v']=new Chart(document.getElementById('cVendas'),{type:'bar',data:{labels:meses.map(mNome),datasets:[{label:'Vendas',data:meses.map(m=>pm[m]),backgroundColor:'rgba(108,99,255,.7)',borderColor:'#6c63ff',borderWidth:1,borderRadius:6}]},options:barOpts()})
+
+    const ps={};p.forEach(x=>{const k=x.status||'sem status';ps[k]=(ps[k]||0)+1})
+    const sL=Object.keys(ps)
+    kd('s'); charts['s']=new Chart(document.getElementById('cStatus'),{type:'doughnut',data:{labels:sL,datasets:[{data:sL.map(s=>ps[s]),backgroundColor:['rgba(0,212,170,.8)','rgba(108,99,255,.8)','rgba(255,92,92,.8)','rgba(245,166,35,.8)'],borderWidth:0,hoverOffset:6}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{color:'#8888a0',padding:16,font:{size:12}}}},cutout:'65%'}})
+
+    const rows=p.slice(0,50).map(x=>`<tr><td><span style="font-family:'DM Mono',monospace;color:var(--muted)">#${x.id}</span></td><td>${x.cliente_nome||'—'}</td><td style="font-family:'DM Mono',monospace">${x.data||'—'}</td><td style="font-weight:500">${fmt(x.total)}</td><td>${x.quantidade_itens||'—'}</td><td><span class="${sc(x.status)}">${(x.status||'—').toUpperCase()}</span></td></tr>`).join('')
+    document.getElementById('tGeral').innerHTML=`<div class="table-header">Pedidos recentes <span class="cbadge">${p.length} registros</span></div><div class="tw"><table><thead><tr><th>ID</th><th>Cliente</th><th>Data</th><th>Total</th><th>Itens</th><th>Status</th></tr></thead><tbody>${rows||'<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--muted)">Nenhum pedido encontrado</td></tr>'}</tbody></table></div>`
+  }
+
+  async function carregarEmpresas(){
+    const ini=document.getElementById('e-ini').value, fim=document.getElementById('e-fim').value
+    document.getElementById('rEmpresas').innerHTML='<div class="loading"><div class="spinner"></div>Carregando...</div>'
+    document.getElementById('tEmpresas').innerHTML='<div class="loading"><div class="spinner"></div>Carregando...</div>'
+
+    let q=db.from('pedidos').select('total,empresa_id,empresas(id,nome)').order('empresa_id')
+    if(ini) q=q.gte('data',ini); if(fim) q=q.lte('data',fim)
+    const {data:p,error}=await q; if(error){console.error(error);return}
+
+    const map={}
+    p.forEach(x=>{const id=x.empresa_id||'sem';const nome=x.empresas?.nome||('Empresa #'+id);if(!map[id])map[id]={nome,total:0,pedidos:0};map[id].total+=Number(x.total||0);map[id].pedidos++})
+    const lista=Object.values(map).sort((a,b)=>b.total-a.total)
+    const totG=lista.reduce((s,e)=>s+e.total,0), med=lista.length?totG/lista.length:0, max=lista[0]?.total||1
+
+    document.getElementById('e-tot').textContent=lista.length
+    document.getElementById('e-mai').textContent=lista[0]?fmt(lista[0].total):'—'
+    document.getElementById('e-mnome').textContent=lista[0]?.nome||'—'
+    document.getElementById('e-med').textContent=fmt(med)
+
+    const t8=lista.slice(0,8)
+    kd('e'); charts['e']=new Chart(document.getElementById('cEmpresas'),{type:'bar',data:{labels:t8.map(e=>e.nome.length>14?e.nome.slice(0,14)+'...':e.nome),datasets:[{label:'Vendas',data:t8.map(e=>e.total),backgroundColor:'rgba(0,212,170,.7)',borderColor:'#00d4aa',borderWidth:1,borderRadius:6}]},options:barOpts('var(--accent2)')})
+
+    document.getElementById('rEmpresas').innerHTML=lista.slice(0,10).map((e,i)=>`<div class="rank-item"><span class="rn">${i+1}</span><span class="rname" title="${e.nome}">${e.nome}</span><div class="rbar-w"><div class="rbar" style="width:${(e.total/max*100).toFixed(0)}%;background:var(--accent2)"></div></div><span class="rval">${fmt(e.total)}</span><span class="rcount">${e.pedidos} ped.</span></div>`).join('')||'<div style="text-align:center;padding:2rem;color:var(--muted)">Sem dados</div>'
+
+    document.getElementById('e-cnt').textContent=lista.length+' empresas'
+    document.getElementById('tEmpresas').innerHTML=`<table><thead><tr><th>#</th><th>Empresa</th><th>Total vendido</th><th>Pedidos</th><th>Ticket médio</th></tr></thead><tbody>${lista.map((e,i)=>`<tr><td><span style="font-family:'DM Mono',monospace;color:var(--muted)">${i+1}</span></td><td style="font-weight:500">${e.nome}</td><td style="font-weight:500;color:var(--accent2)">${fmt(e.total)}</td><td>${e.pedidos}</td><td style="font-family:'DM Mono',monospace">${fmt(e.pedidos?e.total/e.pedidos:0)}</td></tr>`).join('')}</tbody></table>`
+  }
+
+  async function carregarVendedores(){
+    const ini=document.getElementById('v-ini').value, fim=document.getElementById('v-fim').value
+    document.getElementById('rVendedores').innerHTML='<div class="loading"><div class="spinner"></div>Carregando...</div>'
+    document.getElementById('tVendedores').innerHTML='<div class="loading"><div class="spinner"></div>Carregando...</div>'
+
+    let q=db.from('pedidos').select('total,status,vendedor_id,usuarios(id,nome,email)')
+    if(ini) q=q.gte('data',ini); if(fim) q=q.lte('data',fim)
+    const {data:p,error}=await q; if(error){console.error(error);return}
+
+    const map={}
+    p.forEach(x=>{const id=x.vendedor_id||'sem';const nome=x.usuarios?.nome||x.usuarios?.email||(x.vendedor_id?'Vendedor #'+x.vendedor_id:'Sem vendedor');if(!map[id])map[id]={nome,total:0,pedidos:0,pagos:0};map[id].total+=Number(x.total||0);map[id].pedidos++;if(x.status==='pago'||x.status==='confirmado')map[id].pagos++})
+    const lista=Object.values(map).sort((a,b)=>b.total-a.total)
+    const totG=lista.reduce((s,v)=>s+v.total,0), med=lista.length?totG/lista.length:0, max=lista[0]?.total||1
+
+    document.getElementById('v-tot').textContent=lista.length
+    document.getElementById('v-top').textContent=lista[0]?fmt(lista[0].total):'—'
+    document.getElementById('v-tnome').textContent=lista[0]?.nome||'—'
+    document.getElementById('v-med').textContent=fmt(med)
+
+    const t8=lista.slice(0,8)
+    kd('vd'); charts['vd']=new Chart(document.getElementById('cVendedores'),{type:'bar',data:{labels:t8.map(v=>v.nome.length>14?v.nome.slice(0,14)+'...':v.nome),datasets:[{label:'Vendas',data:t8.map(v=>v.total),backgroundColor:'rgba(108,99,255,.7)',borderColor:'#6c63ff',borderWidth:1,borderRadius:6}]},options:barOpts()})
+
+    document.getElementById('rVendedores').innerHTML=lista.slice(0,10).map((v,i)=>`<div class="rank-item"><span class="rn">${i+1}</span><span class="rname" title="${v.nome}">${v.nome}</span><div class="rbar-w"><div class="rbar" style="width:${(v.total/max*100).toFixed(0)}%;background:var(--accent)"></div></div><span class="rval">${fmt(v.total)}</span><span class="rcount">${v.pedidos} ped.</span></div>`).join('')||'<div style="text-align:center;padding:2rem;color:var(--muted)">Sem dados</div>'
+
+    document.getElementById('v-cnt').textContent=lista.length+' vendedores'
+    document.getElementById('tVendedores').innerHTML=`<table><thead><tr><th>#</th><th>Vendedor</th><th>Total vendido</th><th>Pedidos</th><th>Pagos</th><th>Ticket médio</th></tr></thead><tbody>${lista.map((v,i)=>`<tr><td><span style="font-family:'DM Mono',monospace;color:var(--muted)">${i+1}</span></td><td style="font-weight:500">${v.nome}</td><td style="font-weight:500;color:var(--accent)">${fmt(v.total)}</td><td>${v.pedidos}</td><td><span class="sb s-pago">${v.pagos}</span></td><td style="font-family:'DM Mono',monospace">${fmt(v.pedidos?v.total/v.pedidos:0)}</td></tr>`).join('')}</tbody></table>`
+  }
+
+  async function exportarPDF(){
+    const {jsPDF}=window.jspdf
+    const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'})
+    const data=new Date().toLocaleDateString('pt-BR'), hora=new Date().toLocaleTimeString('pt-BR')
+    const addBg=()=>{ doc.setFillColor(15,15,17); doc.rect(0,0,210,297,'F') }
+    addBg()
+    doc.setTextColor(108,99,255); doc.setFontSize(26); doc.setFont('helvetica','bold'); doc.text('NEXUS SISTEMA',20,36)
+    doc.setTextColor(240,240,244); doc.setFontSize(15); doc.setFont('helvetica','normal'); doc.text('Relatório de Vendas',20,47)
+    doc.setTextColor(136,136,160); doc.setFontSize(10); doc.text('Gerado em '+data+' às '+hora,20,56)
+    doc.setDrawColor(108,99,255); doc.setLineWidth(0.4); doc.line(20,62,190,62)
+    doc.setTextColor(240,240,244); doc.setFontSize(12); doc.setFont('helvetica','bold'); doc.text('Resumo geral',20,74)
+    doc.autoTable({startY:80,head:[['Métrica','Valor']],body:[['Total em vendas',document.getElementById('g-tv').textContent],['Pedidos no período',document.getElementById('g-tp').textContent],['Ticket médio',document.getElementById('g-tk').textContent],['Pedidos cancelados',document.getElementById('g-tc').textContent]],theme:'grid',styles:{fontSize:11,textColor:[240,240,244],fillColor:[24,24,28],lineColor:[42,42,50]},headStyles:{fillColor:[108,99,255],textColor:[255,255,255],fontStyle:'bold'},alternateRowStyles:{fillColor:[34,34,40]},margin:{left:20,right:20}})
+    const y1=doc.lastAutoTable.finalY+12
+    doc.setTextColor(240,240,244); doc.setFontSize(12); doc.setFont('helvetica','bold'); doc.text('Pedidos recentes',20,y1)
+    const tGRows=[...document.querySelectorAll('#tGeral table tbody tr')].slice(0,25).map(tr=>[...tr.querySelectorAll('td')].map(td=>td.textContent.trim()))
+    doc.autoTable({startY:y1+6,head:[['ID','Cliente','Data','Total','Itens','Status']],body:tGRows.length?tGRows:[['—','Sem dados','—','—','—','—']],theme:'grid',styles:{fontSize:9,textColor:[240,240,244],fillColor:[24,24,28],lineColor:[42,42,50]},headStyles:{fillColor:[34,34,40],textColor:[136,136,160],fontStyle:'bold'},alternateRowStyles:{fillColor:[34,34,40]},margin:{left:20,right:20}})
+    doc.addPage(); addBg(); doc.setTextColor(0,212,170); doc.setFontSize(14); doc.setFont('helvetica','bold'); doc.text('Relatório por empresa',20,22); doc.setDrawColor(0,212,170); doc.line(20,27,190,27)
+    const eRows=[...document.querySelectorAll('#tEmpresas table tbody tr')].map(tr=>[...tr.querySelectorAll('td')].map(td=>td.textContent.trim()))
+    doc.autoTable({startY:34,head:[['#','Empresa','Total vendido','Pedidos','Ticket médio']],body:eRows.length?eRows:[['—','Sem dados','—','—','—']],theme:'grid',styles:{fontSize:10,textColor:[240,240,244],fillColor:[24,24,28],lineColor:[42,42,50]},headStyles:{fillColor:[0,212,170],textColor:[15,15,17],fontStyle:'bold'},alternateRowStyles:{fillColor:[34,34,40]},margin:{left:20,right:20}})
+    doc.addPage(); addBg(); doc.setTextColor(108,99,255); doc.setFontSize(14); doc.setFont('helvetica','bold'); doc.text('Relatório por vendedor',20,22); doc.setDrawColor(108,99,255); doc.line(20,27,190,27)
+    const vRows=[...document.querySelectorAll('#tVendedores table tbody tr')].map(tr=>[...tr.querySelectorAll('td')].map(td=>td.textContent.trim()))
+    doc.autoTable({startY:34,head:[['#','Vendedor','Total vendido','Pedidos','Pagos','Ticket médio']],body:vRows.length?vRows:[['—','Sem dados','—','—','—','—']],theme:'grid',styles:{fontSize:10,textColor:[240,240,244],fillColor:[24,24,28],lineColor:[42,42,50]},headStyles:{fillColor:[108,99,255],textColor:[255,255,255],fontStyle:'bold'},alternateRowStyles:{fillColor:[34,34,40]},margin:{left:20,right:20}})
+    const total=doc.internal.getNumberOfPages()
+    for(let i=1;i<=total;i++){doc.setPage(i);doc.setTextColor(136,136,160);doc.setFontSize(8);doc.text('Nexus Sistema — '+data,20,291);doc.text('Página '+i+' de '+total,190,291,{align:'right'})}
+    doc.save('relatorio-nexus-'+data.replace(/\//g,'-')+'.pdf')
+  }
+
+  carregarGeral()
+</script>
+</body>
+</html>

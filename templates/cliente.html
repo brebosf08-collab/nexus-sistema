@@ -7,6 +7,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root{--accent:#10b981;--accent-g:rgba(16,185,129,0.10);--bg:#030305;--card:rgba(255,255,255,0.025);--border:rgba(255,255,255,0.07);--muted:#808090;--green:#10b981;--green-g:rgba(16,185,129,0.10);--amber:#f59e0b;--red:#f43f5e;--indigo:#6366f1;--sidebar:260px;}
     *{box-sizing:border-box;margin:0;padding:0;}
@@ -245,6 +246,44 @@ async function api(url,opts={}){
   const r=await fetch(url,{headers:{'Content-Type':'application/json'},...opts});
   const j=await r.json();if(!r.ok)throw new Error(j.mensagem||'Erro');return j;
 }
+const SUPABASE_URL = 'https://gtctfqphvsczeenpysco.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_i7zHWTjev6I-vdCTbBgG7Q_p3qSDvti';
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+let supabaseProductChannel = null;
+
+function unsubscribeProdutoDisponibilidade(){
+  if(!supabaseProductChannel) return;
+  supabaseClient.removeChannel(supabaseProductChannel);
+  supabaseProductChannel = null;
+}
+function subscribeProdutoDisponibilidade(fornId){
+  if(!fornId) return;
+  unsubscribeProdutoDisponibilidade();
+  supabaseProductChannel = supabaseClient.channel(`realtime-produtos-${fornId}`)
+    .on('postgres_changes', { event:'*', schema:'public', table:'produtos', filter:`empresa_id=eq.${fornId}` }, payload => {
+      const prod = payload.new || payload.old;
+      if(!prod) return;
+      const card = document.querySelector(`[data-produto-id="${prod.id}"]`);
+      if(card){
+        const esg = prod.quantidade <= 0;
+        const status = card.querySelector('.produto-status');
+        const qty = card.querySelector('.produto-qty');
+        const btn = card.querySelector('button');
+        if(status){
+          status.textContent = esg ? 'Indisponível' : 'Disponível';
+          status.className = `badge ${esg ? 'badge-zero' : 'badge-ok'} produto-status`;
+        }
+        if(qty){
+          qty.textContent = esg ? '❌ Esgotado' : `${prod.quantidade} disponíveis`;
+        }
+        if(btn){
+          btn.disabled = esg;
+          btn.innerHTML = esg ? '<i class="fas fa-times"></i> Esgotado' : '<i class="fas fa-cart-plus"></i> Fazer Pedido';
+        }
+      }
+    })
+    .subscribe();
+}
 function fmt(v){return 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2});}
 function fmtData(d){if(!d)return '-';return new Date(d).toLocaleDateString('pt-BR');}
 
@@ -331,24 +370,32 @@ async function verProdutos(id,nome){
         p.tempo_preparo?`⏱ Preparo: ${p.tempo_preparo} ${p.tempo_preparo_unidade||'min'}`:'',
         p.tempo_entrega?`🚚 Entrega: ${p.tempo_entrega} ${p.tempo_entrega_unidade||'min'}`:''
       ].filter(Boolean).join(' · ');
-      return`<div class="prod-card">
+      return`<div class="prod-card" data-produto-id="${p.id}">
         ${img}
         <div style="font-weight:700;margin-bottom:4px">${p.nome}</div>
         ${p.descricao?`<div style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;line-height:1.4">${p.descricao}</div>`:''}
         ${tempos?`<div style="font-size:0.75rem;color:var(--amber);margin-bottom:8px">${tempos}</div>`:''}
         <div style="font-size:1.25rem;font-weight:800;color:var(--accent);margin-top:auto;margin-bottom:6px">${fmt(p.preco)}</div>
-        <div style="font-size:0.78rem;color:var(--muted);margin-bottom:10px">${esg?'❌ Esgotado':p.quantidade+' disponíveis'}</div>
+        <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;color:var(--muted);margin-bottom:10px">
+          <span class="badge ${esg ? 'badge-zero' : 'badge-ok'} produto-status">${esg ? 'Indisponível' : 'Disponível'}</span>
+          <span class="produto-qty">${esg ? '❌ Esgotado' : p.quantidade+' disponíveis'}</span>
+        </div>
         <button class="btn btn-primary" style="width:100%" ${esg?'disabled':''} onclick="comprar(${id},'${p.id}','${p.nome.replace(/'/g,"\\'")}',${p.quantidade})">
           ${esg?'<i class="fas fa-times"></i> Esgotado':'<i class="fas fa-cart-plus"></i> Fazer Pedido'}
         </button>
       </div>`;
     }).join(''):'<div style="color:var(--muted);text-align:center;padding:2rem;grid-column:1/-1">Nenhum produto disponível</div>';
-  }catch(e){grid.innerHTML='<div style="color:var(--red);padding:1rem">Erro ao carregar produtos</div>';}
-}
+    if(prods.length){
+      subscribeProdutoDisponibilidade(id);
+    } else {
+      unsubscribeProdutoDisponibilidade();
+    }
+  }catch(e){grid.innerHTML='<div style="color:var(--red);padding:1rem">Erro ao carregar produtos</div>';} }
 
 function voltarFornecedores(){
   document.getElementById('view-produtos').style.display='none';
   document.getElementById('view-fornecedores').style.display='block';
+  unsubscribeProdutoDisponibilidade();
 }
 
 async function comprar(fornId,prodId,nomeProd,maxQtd){

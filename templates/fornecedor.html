@@ -7,6 +7,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root{--accent:#6366f1;--accent-g:rgba(99,102,241,0.10);--bg:#030305;--card:rgba(255,255,255,0.025);--border:rgba(255,255,255,0.07);--muted:#808090;--green:#10b981;--green-g:rgba(16,185,129,0.10);--amber:#f59e0b;--red:#f43f5e;--sidebar:260px;}
     *{box-sizing:border-box;margin:0;padding:0;}
@@ -271,6 +272,7 @@
           <div class="field"><label>Cliente *</label><input name="cliente" required placeholder="Nome do cliente"></div>
           <div class="field"><label>Data *</label><input name="data_pedido" type="date" required></div>
           <div class="field"><label>Vendedor</label><select name="vendedor_id" id="sel-vend-pedido"><option value="">Sem vendedor</option></select></div>
+          <div class="field"><label>Forma de pagamento</label><select name="forma_pagamento" id="sel-forma-pagamento" class="status-sel"><option value="PIX">PIX</option><option value="Cartão de Crédito">Cartão de Crédito</option><option value="Cartão de Débito">Cartão de Débito</option><option value="Boleto">Boleto</option><option value="Transferência">Transferência</option><option value="Dinheiro">Dinheiro</option></select></div>
           <div class="field"><label>Observações</label><input name="observacoes" placeholder="Notas..."></div>
         </div>
         <div style="background:rgba(255,255,255,0.02);padding:1.25rem;border-radius:16px;border:1px solid var(--border);margin-bottom:1.25rem">
@@ -295,7 +297,7 @@
     <div class="card">
       <h3>Pedidos Registrados</h3>
       <div class="table-wrap">
-        <table><thead><tr><th>Pedido</th><th>Cliente</th><th>Vendedor</th><th>Data</th><th>Total</th><th>Comissão</th><th>Status</th><th>Alterar</th></tr></thead>
+        <table><thead><tr><th>Pedido</th><th>Cliente</th><th>Pagamento</th><th>Vendedor</th><th>Data</th><th>Total</th><th>Comissão</th><th>Status</th><th>Alterar</th></tr></thead>
         <tbody id="tb-pedidos"></tbody></table>
       </div>
     </div>
@@ -403,6 +405,26 @@
 
 <div class="notif-bar" id="notif-bar"></div>
 
+<div id="modal-pedido-editar" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:1000;padding:2rem;overflow:auto;">
+  <div style="max-width:560px;margin:0 auto;background:#09090b;border:1px solid rgba(255,255,255,0.08);border-radius:24px;padding:2rem;position:relative;">
+    <button onclick="fecharPedidoDetalhe()" style="position:absolute;top:18px;right:18px;border:none;background:rgba(255,255,255,0.08);color:#fff;border-radius:999px;width:36px;height:36px;cursor:pointer;"><i class="fas fa-times"></i></button>
+    <h2 style="margin-bottom:1rem;">Editar Pedido</h2>
+    <div style="display:grid;gap:1rem;">
+      <div style="font-size:0.95rem;color:var(--muted);"><strong id="pedido-edit-id"></strong> · Cliente: <span id="pedido-edit-cliente"></span></div>
+      <div class="field"><label>Status</label><select id="pedido-edit-status" class="status-sel"><option value="pendente">Pendente</option><option value="confirmado">Confirmado</option><option value="pago">Pago</option><option value="entregue">Entregue</option><option value="cancelado">Cancelado</option></select></div>
+      <div class="field"><label>Vendedor</label><select id="pedido-edit-vendedor" class="status-sel"><option value="">Sem vendedor</option></select></div>
+      <div class="field"><label>Data de Entrega</label><input id="pedido-edit-data-entrega" type="date" style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:0.8rem;color:#fff;width:100%"></div>
+      <div class="field"><label>Forma de pagamento</label><select id="pedido-edit-forma-pagamento" class="status-sel"><option value="PIX">PIX</option><option value="Cartão de Crédito">Cartão de Crédito</option><option value="Cartão de Débito">Cartão de Débito</option><option value="Boleto">Boleto</option><option value="Transferência">Transferência</option><option value="Dinheiro">Dinheiro</option></select></div>
+      <div class="field"><label>Mensagem do Cliente</label><textarea id="pedido-edit-mensagem" rows="4" style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:0.8rem;color:#fff;width:100%;resize:vertical"></textarea></div>
+      <div class="field"><label>Valor da Comissão</label><input id="pedido-edit-comissao" type="number" step="0.01" min="0" style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:0.8rem;color:#fff;width:100%"></div>
+      <div style="display:flex;justify-content:flex-end;gap:1rem;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-outline" onclick="fecharPedidoDetalhe()">Cancelar</button>
+        <button class="btn btn-primary" onclick="salvarPedidoDetalhe()">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── NAVEGAÇÃO ──────────────────────────────────────────────────
 function navTo(sec) {
@@ -421,6 +443,24 @@ async function api(url, opts={}) {
   const j = await r.json();
   if (!r.ok) throw new Error(j.mensagem || 'Erro');
   return j;
+}
+const SUPABASE_URL = 'https://gtctfqphvsczeenpysco.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_i7zHWTjev6I-vdCTbBgG7Q_p3qSDvti';
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+let supabaseStockChannel = null;
+
+function unsubscribeEstoqueFornecedor(){
+  if(!supabaseStockChannel) return;
+  supabaseClient.removeChannel(supabaseStockChannel);
+  supabaseStockChannel = null;
+}
+function subscribeEstoqueFornecedor(){
+  unsubscribeEstoqueFornecedor();
+  supabaseStockChannel = supabaseClient.channel(`realtime-estoque-{{ empresa.id }}`)
+    .on('postgres_changes', { event:'*', schema:'public', table:'produtos', filter:`empresa_id=eq.{{ empresa.id }}` }, payload => {
+      loadEstoque();
+    })
+    .subscribe();
 }
 function fmt(v){return 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2});}
 function fmtData(d){if(!d)return '-';return new Date(d).toLocaleDateString('pt-BR');}
@@ -566,6 +606,7 @@ function renderEstoque(prods){
 document.addEventListener('DOMContentLoaded',()=>{
   const b=document.getElementById('busca-produto');
   if(b)b.addEventListener('input',e=>{const q=e.target.value.toLowerCase();renderEstoque(todosProds.filter(p=>p.nome.toLowerCase().includes(q)||(p.sku||'').toLowerCase().includes(q)));});
+  subscribeEstoqueFornecedor();
 });
 async function addProduto(e){
   e.preventDefault();
@@ -624,12 +665,13 @@ async function loadPedidos(){
       const vNome=p.vendedor_nome||'-';
       const com=p.comissao_valor?fmt(p.comissao_valor):'-';
       return `<tr>
-        <td><b>#${p.id}</b></td><td>${p.cliente_nome||'-'}</td><td>${vNome}</td>
+        <td><b>#${p.id}</b><div style="font-size:0.75rem;color:var(--muted);margin-top:0.35rem">Entrega: ${p.data_entrega?fmtData(p.data_entrega):'-'} · Mensagem: ${p.mensagem_cliente?('Sim'):'Não'}</div></td>
+        <td>${p.cliente_nome||'-'}</td><td>${p.forma_pagamento||'-'}</td><td>${vNome}</td>
         <td>${fmtData(p.data||p.criado_em)}</td>
         <td style="color:var(--green)">${fmt(p.total)}</td>
         <td style="color:var(--accent)">${com}</td>
         <td><span class="badge badge-${p.status||'pendente'}">${(p.status||'pendente').toUpperCase()}</span></td>
-        <td>
+        <td style="display:flex;gap:0.4rem;flex-wrap:wrap;align-items:center;min-width:190px;">
           <select class="status-sel" onchange="mudarStatus(${p.id},this.value)">
             <option value="pendente" ${p.status==='pendente'?'selected':''}>Pendente</option>
             <option value="confirmado" ${p.status==='confirmado'?'selected':''}>Confirmado</option>
@@ -637,11 +679,53 @@ async function loadPedidos(){
             <option value="entregue" ${p.status==='entregue'?'selected':''}>Entregue</option>
             <option value="cancelado" ${p.status==='cancelado'?'selected':''}>Cancelado</option>
           </select>
+          <button class="btn btn-sm btn-outline" onclick="abrirPedidoDetalhe(${p.id})"><i class="fas fa-pen"></i></button>
         </td></tr>`;
-    }).join(''):'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:2rem">Nenhum pedido</td></tr>';
+    }).join(''):'<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:2rem">Nenhum pedido</td></tr>';
     // Comissões por vendedor
     calcularComissoes(pedidos,vends);
   }catch(e){console.error(e);}
+}
+
+let pedidoEditavel = null;
+async function abrirPedidoDetalhe(id){
+  try{
+    const [pedido,vends]=await Promise.all([api(`/api/pedidos/${id}`),api('/api/vendedores')]);
+    if(!pedido) return;
+    pedidoEditavel = pedido;
+    document.getElementById('pedido-edit-id').textContent = `Pedido #${pedido.id}`;
+    document.getElementById('pedido-edit-cliente').textContent = pedido.cliente_nome || '-';
+    const selV=document.getElementById('pedido-edit-vendedor');
+    selV.innerHTML = `<option value="">Sem vendedor</option>` + vends.map(v=>`<option value="${v.id}"${v.id===pedido.vendedor_id?' selected':''}>${v.nome} (${v.comissao||0}%)</option>`).join('');
+    selV.value = pedido.vendedor_id || '';
+    document.getElementById('pedido-edit-status').value = pedido.status || 'pendente';
+    document.getElementById('pedido-edit-data-entrega').value = pedido.data_entrega || '';
+    document.getElementById('pedido-edit-forma-pagamento').value = pedido.forma_pagamento || 'PIX';
+    document.getElementById('pedido-edit-mensagem').value = pedido.mensagem_cliente || '';
+    document.getElementById('pedido-edit-comissao').value = pedido.comissao_valor || '';
+    document.getElementById('modal-pedido-editar').style.display = 'block';
+  }catch(e){notif('Erro ao carregar pedido','error');}
+}
+function fecharPedidoDetalhe(){
+  document.getElementById('modal-pedido-editar').style.display = 'none';
+  pedidoEditavel = null;
+}
+async function salvarPedidoDetalhe(){
+  if(!pedidoEditavel) return;
+  const data={
+    status: document.getElementById('pedido-edit-status').value,
+    vendedor_id: document.getElementById('pedido-edit-vendedor').value||null,
+    data_entrega: document.getElementById('pedido-edit-data-entrega').value||null,
+    forma_pagamento: document.getElementById('pedido-edit-forma-pagamento').value||null,
+    mensagem_cliente: document.getElementById('pedido-edit-mensagem').value.trim(),
+    comissao_valor: parseFloat(document.getElementById('pedido-edit-comissao').value||0)
+  };
+  try{
+    await api(`/api/pedidos/${pedidoEditavel.id}`,{method:'PUT',body:JSON.stringify(data)});
+    notif('Pedido atualizado!','success');
+    fecharPedidoDetalhe();
+    loadPedidos();
+  }catch(ex){notif('Erro ao salvar pedido','error');}
 }
 
 function calcularComissoes(pedidos,vends){
@@ -681,7 +765,7 @@ async function criarPedido(e){
   const totalPed=itensPedido.reduce((s,i)=>s+i.subtotal,0);
   const comVal=(totalPed*comPct/100);
   try{
-    await api('/api/pedidos',{method:'POST',body:JSON.stringify({cliente_nome:fd.get('cliente'),data:fd.get('data_pedido'),vendedor_id:fd.get('vendedor_id')||null,observacoes:fd.get('observacoes'),itens:itensPedido,comissao_valor:comVal})});
+    await api('/api/pedidos',{method:'POST',body:JSON.stringify({cliente_nome:fd.get('cliente'),data:fd.get('data_pedido'),vendedor_id:fd.get('vendedor_id')||null,forma_pagamento:fd.get('forma_pagamento')||null,observacoes:fd.get('observacoes'),itens:itensPedido,comissao_valor:comVal})});
     setMsg('msg-pedido','✅ Pedido registrado!',true);
     itensPedido=[];renderItens();e.target.reset();
     loadPedidos();verificarMetas();

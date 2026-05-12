@@ -84,12 +84,17 @@ CREATE TABLE IF NOT EXISTS pedidos (
     vendedor_id INTEGER REFERENCES vendedores(id) ON DELETE SET NULL,
     cliente_nome VARCHAR(255),
     data DATE NOT NULL,
+    data_entrega DATE,
+    forma_pagamento VARCHAR(100),
     total NUMERIC(12,2) DEFAULT 0,
     quantidade_itens INTEGER DEFAULT 0,
     status VARCHAR(50) DEFAULT 'pendente',
     observacoes TEXT,
     criado_em TIMESTAMP DEFAULT NOW()
 );
+
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS data_entrega DATE;
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS forma_pagamento VARCHAR(100);
 
 CREATE TABLE IF NOT EXISTS itens_pedido (
     id SERIAL PRIMARY KEY,
