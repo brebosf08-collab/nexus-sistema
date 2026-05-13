@@ -111,6 +111,7 @@
   <button class="nav-item" data-sec="pedidos" onclick="navTo('pedidos')"><i class="fas fa-file-invoice-dollar"></i> Pedidos</button>
   <button class="nav-item" data-sec="vendedores" onclick="navTo('vendedores')"><i class="fas fa-users-gear"></i> Time Comercial</button>
   <button class="nav-item" data-sec="metas" onclick="navTo('metas')"><i class="fas fa-bullseye"></i> Metas</button>
+  <button class="nav-item" data-sec="vitrine" onclick="navTo('vitrine')"><i class="fas fa-share-nodes"></i> Compartilhar</button>
   <div class="nav-label">Gestão</div>
   <button class="nav-item" data-sec="reunioes" onclick="navTo('reunioes')"><i class="fas fa-calendar-check"></i> Agendas</button>
   <button class="nav-item" data-sec="contatos" onclick="navTo('contatos')"><i class="fas fa-address-book"></i> Contatos</button>
@@ -350,6 +351,39 @@
     <div class="meta-grid" id="grid-metas"></div>
   </div>
 
+  <!-- COMPARTILHAR VITRINE -->
+  <div id="sec-vitrine" class="sec">
+    <div class="page-title"><i class="fas fa-share-nodes"></i> Compartilhar Vitrine</div>
+    <div class="card">
+      <h3><i class="fas fa-copy"></i> Gerar Link Compartilhável</h3>
+      <p style="color:var(--muted);margin-bottom:1rem;font-size:0.9rem">Copie o link abaixo e compartilhe com clientes via WhatsApp, email ou redes sociais.</p>
+      <div class="vitrine-box">
+        <input type="text" id="link-compartilhavel" value="" readonly style="flex:1">
+        <button class="btn btn-primary" onclick="copiarLinkCompartilhavel()"><i class="fas fa-copy"></i> Copiar Link</button>
+        <a href="" target="_blank" id="btn-visualizar-vitrine" class="btn btn-outline"><i class="fas fa-eye"></i> Visualizar</a>
+      </div>
+      <div id="msg-link-copia" class="msg ok" style="display:none;margin-top:1rem"><i class="fas fa-check"></i> Link copiado para a área de transferência!</div>
+    </div>
+
+    <div class="card">
+      <h3><i class="fas fa-envelope"></i> Enviar Convite para Clientes</h3>
+      <form onsubmit="compartilharComCliente(event)">
+        <div class="form-grid">
+          <div class="field full"><label>Selecione um cliente</label><select id="sel-cliente-convite" style="background:#1e1e2e;border:1px solid var(--border);border-radius:12px;padding:0.7rem 1rem;color:#fff" required><option value="">Carregando clientes...</option></select></div>
+        </div>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Enviar Convite</button>
+      </form>
+      <div id="msg-convite" class="msg" style="margin-top:1rem"></div>
+    </div>
+
+    <div class="card">
+      <h3><i class="fas fa-eye"></i> Visitantes da Sua Vitrine</h3>
+      <div class="table-wrap">
+        <table><thead><tr><th>Cliente</th><th>Email</th><th>Data Acesso</th></tr></thead><tbody id="tb-visitantes-vitrine"></tbody></table>
+      </div>
+    </div>
+  </div>
+
   <!-- REUNIÕES -->
   <div id="sec-reunioes" class="sec">
     <div class="page-title"><i class="fas fa-calendar-check"></i> Agendas</div>
@@ -433,7 +467,7 @@ function navTo(sec) {
   const el = document.getElementById('sec-' + sec);
   if (el) el.classList.add('active');
   document.querySelectorAll(`.nav-item[data-sec="${sec}"]`).forEach(n => n.classList.add('active'));
-  const loaders = {estoque:loadEstoque,categorias:loadCategorias,pedidos:loadPedidos,vendedores:loadVendedores,reunioes:loadReunioes,contatos:loadContatos,historico:loadHistorico,metas:loadMetas};
+  const loaders = {estoque:loadEstoque,categorias:loadCategorias,pedidos:loadPedidos,vendedores:loadVendedores,reunioes:loadReunioes,contatos:loadContatos,historico:loadHistorico,metas:loadMetas,vitrine:loadVitrine};
   if (loaders[sec]) loaders[sec]();
 }
 
@@ -496,18 +530,25 @@ function copiarLink(){
 let chartInst=null;
 async function loadDashboard(){
   try{
-    const [dash,prods,pedidos]=await Promise.all([api('/api/dashboard'),api('/api/produtos'),api('/api/pedidos')]);
-    document.getElementById('d-produtos').textContent=dash.total_produtos||0;
+    const [prods,pedidos]=await Promise.all([api('/api/produtos'),api('/api/pedidos')]);
+    // Garantir arrays válidos
+    const prodArray=Array.isArray(prods)?prods:[];
+    const pedidosArray=Array.isArray(pedidos)?pedidos:[];
+
+    // Contadores básicos
+    document.getElementById('d-produtos').textContent=prodArray.length;
+    document.getElementById('d-pedidos').textContent=pedidosArray.length;
+
     // Custo e venda calculados dos produtos
-    const totalCusto=prods.reduce((s,p)=>s+Number(p.custo||0)*Number(p.quantidade||0),0);
-    const totalVenda=prods.reduce((s,p)=>s+Number(p.preco||0)*Number(p.quantidade||0),0);
-    const totalReceita=pedidos.reduce((s,p)=>s+Number(p.total||0),0);
+    const totalCusto=prodArray.reduce((s,p)=>s+Number(p.custo||0)*Number(p.quantidade||0),0);
+    const totalVenda=prodArray.reduce((s,p)=>s+Number(p.preco||0)*Number(p.quantidade||0),0);
+    const totalReceita=pedidosArray.reduce((s,p)=>s+Number(p.total||0),0);
     document.getElementById('d-custo').textContent=fmt(totalCusto);
     document.getElementById('d-valor').textContent=fmt(totalVenda);
-    document.getElementById('d-pedidos').textContent=pedidos.length;
     document.getElementById('d-receita').textContent=fmt(totalReceita);
-    // Alertas
-    const baixos=prods.filter(p=>Number(p.quantidade||0)<=Number(p.minimo||0));
+
+    // Alertas de estoque
+    const baixos=prodArray.filter(p=>Number(p.quantidade||0)<=Number(p.minimo||0));
     document.getElementById('d-baixos').textContent=baixos.length;
     if(baixos.length>0){
       document.getElementById('card-alertas').style.display='block';
@@ -515,11 +556,12 @@ async function loadDashboard(){
       tb.innerHTML=baixos.map(p=>`<tr><td><b>${p.nome}</b></td><td><span class="badge ${p.quantidade==0?'badge-zero':'badge-low'}">${p.quantidade}</span></td><td>${p.minimo}</td><td><button class="btn btn-sm btn-success" onclick="navTo('estoque')"><i class="fas fa-plus"></i> Repor</button></td></tr>`).join('');
       baixos.forEach(p=>{if(p.quantidade==0)notif(`🔴 Produto ZERADO: ${p.nome}`,'error');else notif(`⚠️ Estoque baixo: ${p.nome} (${p.quantidade} un.)`,'warn');});
     }
+
     // Meta destaque
     const metas=getMetas();
     if(metas.length>0){
       const m=metas[0];
-      const atual=m.tipo==='vendas'?totalReceita:pedidos.length;
+      const atual=m.tipo==='vendas'?totalReceita:pedidosArray.length;
       const pct=Math.min(100,Math.round((atual/m.valor)*100));
       document.getElementById('card-meta-destaque').style.display='block';
       document.getElementById('meta-destaque-content').innerHTML=`
@@ -527,7 +569,7 @@ async function loadDashboard(){
         <div class="meta-progress"><div class="meta-bar" style="width:${pct}%;background:${pct>=100?'var(--green)':pct>=80?'var(--amber)':'var(--accent)'}"></div></div>
         <div style="text-align:right;font-size:0.8rem;color:var(--muted)">${pct}% concluído</div>`;
     }
-  }catch(e){console.error(e);}
+  }catch(e){console.error('Erro no dashboard:',e);}
   loadGrafico('semana');
   verificarReunioes();
 }
@@ -536,25 +578,26 @@ async function loadGrafico(periodo){
   ['dia','semana','mes'].forEach(p=>{const b=document.getElementById('btn-'+p);if(b)b.className='btn btn-sm '+(p===periodo?'btn-primary':'btn-outline');});
   try{
     const pedidos=await api('/api/pedidos');
+    const pedidosArray=Array.isArray(pedidos)?pedidos:[];
     const hoje=new Date();
     let labels=[],data=[];
     if(periodo==='dia'){
       labels=Array.from({length:24},(_,i)=>i+'h');data=Array(24).fill(0);
-      pedidos.forEach(p=>{const d=new Date(p.criado_em||p.data);if(d.toDateString()===hoje.toDateString())data[d.getHours()]+=Number(p.total||0);});
+      pedidosArray.forEach(p=>{const d=new Date(p.criado_em||p.data);if(d.toDateString()===hoje.toDateString())data[d.getHours()]+=Number(p.total||0);});
     }else if(periodo==='semana'){
       const dias=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
       labels=Array.from({length:7},(_,i)=>{const d=new Date(hoje);d.setDate(hoje.getDate()-6+i);return dias[d.getDay()];});
       data=Array(7).fill(0);
-      pedidos.forEach(p=>{const d=new Date(p.criado_em||p.data);const diff=Math.round((hoje-d)/86400000);if(diff>=0&&diff<7)data[6-diff]+=Number(p.total||0);});
+      pedidosArray.forEach(p=>{const d=new Date(p.criado_em||p.data);const diff=Math.round((hoje-d)/86400000);if(diff>=0&&diff<7)data[6-diff]+=Number(p.total||0);});
     }else{
       labels=Array.from({length:30},(_,i)=>{const d=new Date(hoje);d.setDate(hoje.getDate()-29+i);return d.getDate()+'/'+(String(d.getMonth()+1).padStart(2,'0'));});
       data=Array(30).fill(0);
-      pedidos.forEach(p=>{const d=new Date(p.criado_em||p.data);const diff=Math.round((hoje-d)/86400000);if(diff>=0&&diff<30)data[29-diff]+=Number(p.total||0);});
+      pedidosArray.forEach(p=>{const d=new Date(p.criado_em||p.data);const diff=Math.round((hoje-d)/86400000);if(diff>=0&&diff<30)data[29-diff]+=Number(p.total||0);});
     }
     if(chartInst)chartInst.destroy();
     const ctx=document.getElementById('chart-lucro').getContext('2d');
     chartInst=new Chart(ctx,{type:'bar',data:{labels,datasets:[{label:'Vendas (R$)',data,backgroundColor:'rgba(99,102,241,0.5)',borderColor:'#6366f1',borderWidth:2,borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#808090',font:{size:11}},grid:{color:'rgba(255,255,255,0.03)'}},y:{ticks:{color:'#808090',font:{size:11},callback:v=>'R$'+v},grid:{color:'rgba(255,255,255,0.05)'}}}}});
-  }catch(e){console.error(e);}
+  }catch(e){console.error('Erro no gráfico fornecedor:',e);}
 }
 
 // ── REUNIÕES — aviso 3h antes ─────────────────────────────────
@@ -607,6 +650,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   const b=document.getElementById('busca-produto');
   if(b)b.addEventListener('input',e=>{const q=e.target.value.toLowerCase();renderEstoque(todosProds.filter(p=>p.nome.toLowerCase().includes(q)||(p.sku||'').toLowerCase().includes(q)));});
   subscribeEstoqueFornecedor();
+  loadEstoque();
+  loadCategorias();
 });
 async function addProduto(e){
   e.preventDefault();
@@ -868,6 +913,42 @@ function renderMetas(){
   }).join('');
 }
 function delMeta(id){saveMetas(getMetas().filter(m=>m.id!==id));renderMetas();}
+
+// ── VITRINE ────────────────────────────────────────────────
+async function loadVitrine(){
+  try{
+    const clientes=await api('/api/clientes');
+    const sel=document.getElementById('sel-cliente-convite');
+    sel.innerHTML=clientes.length?clientes.map(c=>`<option value="${c.id}">${c.nome}</option>`).join(''):'<option value="">Nenhum cliente disponível</option>';
+
+    const link=window.location.origin+'/loja/{{ empresa.id }}';
+    document.getElementById('link-compartilhavel').value=link;
+    document.getElementById('btn-visualizar-vitrine').href=link;
+
+    const visitantes=await api('/api/vitrine/{{ empresa.id }}/visitantes');
+    const tb=document.getElementById('tb-visitantes-vitrine');
+    tb.innerHTML=visitantes.length?visitantes.map(v=>`<tr><td><b>${v.nome}</b></td><td>${v.email||'-'}</td><td>${fmtData(v.visitado_em)}</td></tr>`).join(''):'<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:2rem">Nenhum visitante ainda</td></tr>';
+  }catch(e){console.error(e);}
+}
+
+function copiarLinkCompartilhavel(){
+  const inp=document.getElementById('link-compartilhavel');
+  navigator.clipboard.writeText(inp.value).then(()=>{
+    document.getElementById('msg-link-copia').style.display='block';
+    setTimeout(()=>{document.getElementById('msg-link-copia').style.display='none';},3000);
+  });
+}
+
+async function compartilharComCliente(e){
+  e.preventDefault();
+  const clienteId=document.getElementById('sel-cliente-convite').value;
+  if(!clienteId){notif('Selecione um cliente','warn');return;}
+  try{
+    await api('/api/vitrine/compartilhar',{method:'POST',body:JSON.stringify({cliente_id:parseInt(clienteId),metodo:'convite'})});
+    setMsg('msg-convite','✅ Convite enviado com sucesso!',true);
+    document.getElementById('sel-cliente-convite').value='';
+  }catch(ex){setMsg('msg-convite','❌ '+ex.message,false);}
+}
 
 // ── REUNIÕES ───────────────────────────────────────────────────
 async function loadReunioes(){

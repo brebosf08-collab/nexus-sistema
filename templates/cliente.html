@@ -95,6 +95,7 @@
   <button class="nav-item active" data-sec="dashboard" onclick="navTo('dashboard')"><i class="fas fa-chart-pie"></i> Dashboard</button>
   <div class="nav-label">Mercado</div>
   <button class="nav-item" data-sec="catalogo" onclick="navTo('catalogo')"><i class="fas fa-store"></i> Catálogo</button>
+  <button class="nav-item" data-sec="fornecedores" onclick="navTo('fornecedores')"><i class="fas fa-share-nodes"></i> Quem Compartilhou</button>
   <button class="nav-item" data-sec="pedidos" onclick="navTo('pedidos')"><i class="fas fa-receipt"></i> Meus Pedidos</button>
   <div class="nav-label">Gestão</div>
   <button class="nav-item" data-sec="contatos" onclick="navTo('contatos')"><i class="fas fa-address-book"></i> Minha Rede</button>
@@ -170,6 +171,15 @@
     </div>
   </div>
 
+  <!-- FORNECEDORES QUE COMPARTILHARAM -->
+  <div id="sec-fornecedores" class="sec">
+    <div class="page-title"><i class="fas fa-share-nodes"></i> Fornecedores que Compartilharam</div>
+    <div class="card">
+      <p style="color:var(--muted);margin-bottom:1.5rem">Fornecedores que enviaram convite ou link para você.</p>
+      <div id="grid-fornecedores-compartilhados" class="forn-grid"></div>
+    </div>
+  </div>
+
   <!-- CONTATOS -->
   <div id="sec-contatos" class="sec">
     <div class="page-title"><i class="fas fa-address-book"></i> Minha Rede</div>
@@ -237,7 +247,7 @@ function navTo(sec){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   const el=document.getElementById('sec-'+sec);if(el)el.classList.add('active');
   document.querySelectorAll(`.nav-item[data-sec="${sec}"]`).forEach(n=>n.classList.add('active'));
-  const loaders={catalogo:loadCatalogo,pedidos:loadPedidos,contatos:loadContatos,reunioes:loadReunioes,historico:loadHistorico};
+  const loaders={catalogo:loadCatalogo,fornecedores:loadFornecedoresCompartilhados,pedidos:loadPedidos,contatos:loadContatos,reunioes:loadReunioes,historico:loadHistorico};
   if(loaders[sec])loaders[sec]();
 }
 
@@ -305,15 +315,19 @@ let chartInst=null;
 async function loadDashboard(){
   try{
     const [pedidos,contatos]=await Promise.all([api('/api/pedidos'),api('/api/contatos')]);
-    document.getElementById('d-pedidos').textContent=pedidos.length;
-    document.getElementById('d-total').textContent=fmt(pedidos.reduce((s,p)=>s+Number(p.total||0),0));
-    document.getElementById('d-pendentes').textContent=pedidos.filter(p=>p.status==='pendente').length;
-    document.getElementById('d-contatos').textContent=contatos.length;
+    const pedidosArray=Array.isArray(pedidos)?pedidos:[];
+    const contatosArray=Array.isArray(contatos)?contatos:[];
+
+    document.getElementById('d-pedidos').textContent=pedidosArray.length;
+    document.getElementById('d-total').textContent=fmt(pedidosArray.reduce((s,p)=>s+Number(p.total||0),0));
+    document.getElementById('d-pendentes').textContent=pedidosArray.filter(p=>p.status==='pendente').length;
+    document.getElementById('d-contatos').textContent=contatosArray.length;
+
     // Últimos 5 pedidos
     const tb=document.getElementById('tb-ultimos-pedidos');
-    const ults=pedidos.slice(0,5);
+    const ults=pedidosArray.slice(0,5);
     tb.innerHTML=ults.length?ults.map(p=>`<tr><td><b>#${p.id}</b></td><td>${p.empresa_nome||'-'}</td><td>${fmtData(p.data||p.criado_em)}</td><td style="color:var(--accent)">${fmt(p.total)}</td><td><span class="badge badge-${p.status||'pendente'}">${(p.status||'pendente').toUpperCase()}</span></td></tr>`).join(''):'<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:2rem">Nenhum pedido</td></tr>';
-  }catch(e){console.error(e);}
+  }catch(e){console.error('Erro no dashboard cliente:',e);}
   loadGrafico('mes');
 }
 
@@ -321,21 +335,22 @@ async function loadGrafico(periodo){
   ['semana','mes'].forEach(p=>{const b=document.getElementById('btn-'+p);if(b)b.className='btn btn-sm '+(p===periodo?'btn-primary':'btn-outline');});
   try{
     const pedidos=await api('/api/pedidos');
+    const pedidosArray=Array.isArray(pedidos)?pedidos:[];
     const hoje=new Date();let labels=[],data=[];
     if(periodo==='semana'){
       const dias=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
       labels=Array.from({length:7},(_,i)=>{const d=new Date(hoje);d.setDate(hoje.getDate()-6+i);return dias[d.getDay()];});
       data=Array(7).fill(0);
-      pedidos.forEach(p=>{const d=new Date(p.criado_em||p.data);const diff=Math.round((hoje-d)/86400000);if(diff>=0&&diff<7)data[6-diff]+=Number(p.total||0);});
+      pedidosArray.forEach(p=>{const d=new Date(p.criado_em||p.data);const diff=Math.round((hoje-d)/86400000);if(diff>=0&&diff<7)data[6-diff]+=Number(p.total||0);});
     }else{
       labels=Array.from({length:30},(_,i)=>{const d=new Date(hoje);d.setDate(hoje.getDate()-29+i);return d.getDate()+'/'+(String(d.getMonth()+1).padStart(2,'0'));});
       data=Array(30).fill(0);
-      pedidos.forEach(p=>{const d=new Date(p.criado_em||p.data);const diff=Math.round((hoje-d)/86400000);if(diff>=0&&diff<30)data[29-diff]+=Number(p.total||0);});
+      pedidosArray.forEach(p=>{const d=new Date(p.criado_em||p.data);const diff=Math.round((hoje-d)/86400000);if(diff>=0&&diff<30)data[29-diff]+=Number(p.total||0);});
     }
     if(chartInst)chartInst.destroy();
     const ctx=document.getElementById('chart-compras').getContext('2d');
     chartInst=new Chart(ctx,{type:'line',data:{labels,datasets:[{label:'Compras (R$)',data,backgroundColor:'rgba(16,185,129,0.15)',borderColor:'#10b981',borderWidth:2,tension:0.4,fill:true,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#808090',font:{size:11}},grid:{color:'rgba(255,255,255,0.03)'}},y:{ticks:{color:'#808090',font:{size:11},callback:v=>'R$'+v},grid:{color:'rgba(255,255,255,0.05)'}}}}});
-  }catch(e){}
+  }catch(e){console.error('Erro no gráfico cliente:',e);}
 }
 
 // ── CATÁLOGO ───────────────────────────────────────────────────
@@ -396,6 +411,38 @@ function voltarFornecedores(){
   document.getElementById('view-produtos').style.display='none';
   document.getElementById('view-fornecedores').style.display='block';
   unsubscribeProdutoDisponibilidade();
+}
+
+async function loadFornecedoresCompartilhados(){
+  try{
+    const forns=await api('/api/vitrine/fornecedores');
+    const grid=document.getElementById('grid-fornecedores-compartilhados');
+    grid.innerHTML=forns.length?forns.map(f=>`
+      <div class="forn-card">
+        <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:0.5rem">
+          <div style="width:48px;height:48px;border-radius:14px;background:var(--accent-g);display:flex;align-items:center;justify-content:center">
+            <i class="fas fa-store" style="color:var(--accent);font-size:1.2rem"></i>
+          </div>
+          ${f.aceito?'<span class="badge badge-ok" style="font-size:0.65rem">✓ Aceito</span>':'<span class="badge badge-pendente" style="font-size:0.65rem">Pendente</span>'}
+        </div>
+        <div style="font-size:1rem;font-weight:700;margin-bottom:6px">${f.nome}</div>
+        <div style="font-size:0.8rem;color:var(--muted);margin-bottom:1rem"><i class="fas fa-envelope"></i> ${f.email||'-'}</div>
+        <div style="font-size:0.75rem;color:var(--muted);margin-bottom:0.75rem">
+          Método: <b>${f.metodo==='convite'?'📨 Convite':'🔗 Link'}</b><br>
+          Compartilhado: <b>${new Date(f.criado_em).toLocaleDateString('pt-BR')}</b>
+        </div>
+        <button class="btn btn-primary btn-sm" style="width:100%" onclick="verProdutos(${f.id},'${f.nome.replace(/'/g,"\\'")}')"><i class="fas fa-arrow-right"></i> Ver Catálogo</button>
+        ${!f.aceito?'<button class="btn btn-outline btn-sm" style="width:100%;margin-top:0.5rem" onclick="aceitarCompartilhamento(${f.compartilhamento_id})"><i class="fas fa-check"></i> Aceitar</button>':''}
+      </div>`).join(''):'<div style="color:var(--muted);padding:2rem;text-align:center;grid-column:1/-1">Nenhum fornecedor compartilhou com você ainda</div>';
+  }catch(e){console.error(e);}
+}
+
+async function aceitarCompartilhamento(id){
+  try{
+    await api(`/api/vitrine/${id}/aceitar`,{method:'PUT'});
+    notif('✅ Compartilhamento aceito!','success');
+    loadFornecedoresCompartilhados();
+  }catch(ex){notif('Erro: '+ex.message,'error');}
 }
 
 async function comprar(fornId,prodId,nomeProd,maxQtd){

@@ -19,13 +19,16 @@ from supabase_db import (
     criar_produto, obter_produtos, obter_produto, atualizar_produto, deletar_produto,
     adicionar_estoque, retirar_estoque,
     criar_vendedor, obter_vendedores, deletar_vendedor,
-    criar_pedido, obter_pedidos, obter_pedido_detalhado, atualizar_status_pedido,
+    criar_pedido, obter_pedidos, obter_pedido_detalhado, atualizar_status_pedido, atualizar_pedido,
     obter_historico,
     criar_reuniao, obter_reunioes, atualizar_status_reuniao, deletar_reuniao,
     criar_contato, obter_contatos, deletar_contato,
     obter_dashboard,
     criar_aviso, obter_avisos, contar_avisos_nao_lidos, marcar_aviso_lido, deletar_aviso,
     salvar_perfil_loja, obter_perfil_loja, listar_fornecedores, listar_clientes,
+    criar_notificacao, obter_notificacoes, marcar_notificacao_lida, deletar_notificacao, contar_notificacoes_nao_lidas,
+    compartilhar_vitrine, aceitar_compartilhamento, obter_fornecedores_compartilhados, registrar_visita_vitrine, obter_visitantes_vitrine,
+    obter_relatorio_fornecedor, obter_relatorio_cliente,
 )
 
 # Configuração de caminhos absoluta
@@ -41,6 +44,8 @@ CORS(app)
 
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'nexus-ultra-secure-key-2026')
 app.config['UPLOAD_FOLDER'] = os.path.join(STATIC_DIR, 'uploads')
+app.config['SUPABASE_URL'] = os.environ.get('SUPABASE_URL', 'https://gtctfqphvsczeenpysco.supabase.co')
+app.config['SUPABASE_KEY'] = os.environ.get('NEXT_PUBLIC_SUPABASE_ANON_KEY', '')
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # ═══════════════════════════════════════════
@@ -134,13 +139,48 @@ def painel_cliente():
 @login_required
 def relatorios():
     tipo = session.get('empresa_tipo')
-    if tipo not in ('fornecedor', 'cliente'):
-        return redirect(url_for('login_page'))
     empresa = obter_empresa(get_empresa_id())
     if not empresa:
         session.clear()
         return redirect(url_for('login_page'))
-    return render_template('relatorios.html', empresa=empresa, usuario=session.get('user_nome'))
+    # Redireciona para o painel certo
+    if tipo == 'fornecedor':
+        return redirect(url_for('relatorios_fornecedor'))
+    return redirect(url_for('relatorios_cliente'))
+
+
+@app.route('/relatorios/fornecedor')
+@login_required
+def relatorios_fornecedor():
+    if session.get('empresa_tipo') != 'fornecedor':
+        return redirect(url_for('painel_cliente'))
+    empresa = obter_empresa(get_empresa_id())
+    if not empresa:
+        session.clear()
+        return redirect(url_for('login_page'))
+    return render_template('relatorio_fornecedor.html',
+        empresa=empresa,
+        empresa_id=get_empresa_id(),
+        empresa_nome=session.get('empresa_nome'),
+        usuario=session.get('user_nome')
+    )
+
+
+@app.route('/relatorios/cliente')
+@login_required
+def relatorios_cliente():
+    if session.get('empresa_tipo') != 'cliente':
+        return redirect(url_for('painel_fornecedor'))
+    empresa = obter_empresa(get_empresa_id())
+    if not empresa:
+        session.clear()
+        return redirect(url_for('login_page'))
+    return render_template('relatorio_cliente.html',
+        empresa=empresa,
+        empresa_id=get_empresa_id(),
+        empresa_nome=session.get('empresa_nome'),
+        usuario=session.get('user_nome')
+    )
 
 
 @app.route('/loja/<int:forn_id>')
@@ -150,6 +190,11 @@ def vitrine_fornecedor(forn_id):
     if not fornecedor or fornecedor.get('tipo') != 'fornecedor':
         abort(404)
     produtos = obter_produtos(forn_id)
+
+    # Registra visita se cliente está logado
+    if session.get('user_id') and session.get('empresa_tipo') == 'cliente':
+        registrar_visita_vitrine(forn_id, get_empresa_id())
+
     return render_template(
         'vitrine.html', fornecedor=fornecedor, produtos=produtos,
         user_type=session.get('empresa_tipo'), user_nome=session.get('user_nome'),
@@ -214,7 +259,6 @@ def api_login_session():
         return jsonify({'sucesso': False, 'mensagem': 'Email não fornecido'}), 400
 
     try:
-        # Busca o usuário e a empresa vinculada no banco
         res = supabase.table('usuarios').select('*, empresas(nome, tipo)').eq('login', email).execute()
         if not res.data:
             return jsonify({'sucesso': False, 'mensagem': 'Usuário não encontrado no banco'}), 404
@@ -277,20 +321,13 @@ def api_criar_categoria():
     data = request.get_json(force=True, silent=True) or {}
     nome = (data.get('nome') or '').strip()
     empresa_id = get_empresa_id()
-    
-    print(f">>> Tentando criar categoria: '{nome}' para empresa: {empresa_id}")
-    
     if not nome:
         return jsonify({'sucesso': False, 'mensagem': 'Nome da categoria é obrigatório'}), 400
     if not empresa_id:
         return jsonify({'sucesso': False, 'mensagem': 'Sessão inválida. Faça login novamente.'}), 401
-        
     r = criar_categoria(empresa_id, nome)
     if not r.get('sucesso'):
-        print(f"!!! Erro no banco ao criar categoria: {r.get('mensagem')}")
         return jsonify(r), 400
-        
-    print(f"✅ Categoria criada com sucesso: ID {r.get('id')}")
     return jsonify(r), 201
 
 
@@ -313,48 +350,50 @@ def api_produtos():
 @app.route('/api/produtos', methods=['POST'])
 @login_required
 def api_criar_produto():
-    data = request.form if request.form else request.get_json(force=True, silent=True) or {}
+    # Aceita tanto form-data (com imagem) quanto JSON
+    if request.content_type and 'multipart' in request.content_type:
+        data = request.form
+    else:
+        data = request.get_json(force=True, silent=True) or {}
+
     empresa_id = get_empresa_id()
-    
     nome = (data.get('nome') or '').strip()
-    print(f">>> Tentando criar produto: '{nome}' para empresa: {empresa_id}")
 
     if not nome:
         return jsonify({'sucesso': False, 'mensagem': 'Nome do produto é obrigatório'}), 400
     if not empresa_id:
         return jsonify({'sucesso': False, 'mensagem': 'Sessão inválida. Faça login novamente.'}), 401
 
-    # Imagem upload
+    # Upload de imagem
     imagem_filename = None
     if 'imagem' in request.files:
         img_file = request.files['imagem']
         if img_file and img_file.filename != '':
             ext = img_file.filename.rsplit('.', 1)[-1].lower()
-            filename = secure_filename(f"{uuid.uuid4().hex}.{ext}")
-            img_file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            imagem_filename = filename
+            if ext in ('jpg', 'jpeg', 'png', 'gif', 'webp'):
+                filename = secure_filename(f"{uuid.uuid4().hex}.{ext}")
+                img_file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                imagem_filename = filename
 
-    # Tratamento de valores numéricos
     def to_float(val):
-        try: return float(str(val).replace(',', '.'))
+        try: return float(str(val or 0).replace(',', '.'))
         except: return 0.0
+
     def to_int(val):
-        try: return int(val)
+        try: return int(val or 0)
         except: return 0
 
-    categoria_nome = (data.get('categoria_nome') or '').strip()
+    # Categoria — cria se vier nome, usa id se vier id
     cat_id = data.get('categoria_id')
     if cat_id:
-        try:
-            cat_id = int(cat_id)
-        except:
-            cat_id = None
+        try: cat_id = int(cat_id)
+        except: cat_id = None
 
-    if not cat_id and categoria_nome:
-        cat_res = criar_categoria(empresa_id, categoria_nome)
-        if not cat_res.get('sucesso'):
-            return jsonify(cat_res), 400
-        cat_id = cat_res.get('id')
+    nova_cat = (data.get('categoria_nome') or '').strip()
+    if not cat_id and nova_cat:
+        cat_res = criar_categoria(empresa_id, nova_cat)
+        if cat_res.get('sucesso'):
+            cat_id = cat_res.get('id')
 
     r = criar_produto(
         empresa_id,
@@ -368,12 +407,9 @@ def api_criar_produto():
         data.get('descricao', ''),
         imagem_filename
     )
-    
+
     if not r.get('sucesso'):
-        print(f"!!! Erro no banco ao criar produto: {r.get('mensagem')}")
         return jsonify(r), 400
-        
-    print(f"✅ Produto criado com sucesso: ID {r.get('id')}")
     return jsonify(r), 201
 
 
@@ -401,11 +437,9 @@ def api_entrada_estoque(pid):
         qtd = int(data.get('quantidade', 0))
     except:
         return jsonify({'sucesso': False, 'mensagem': 'Quantidade deve ser um número'}), 400
-        
     obs = (data.get('observacoes') or '').strip()
     if qtd <= 0:
         return jsonify({'sucesso': False, 'mensagem': 'Quantidade deve ser positiva'}), 400
-    
     r = adicionar_estoque(get_empresa_id(), pid, qtd, obs)
     if not r.get('sucesso'):
         return jsonify(r), 400
@@ -420,11 +454,9 @@ def api_saida_estoque(pid):
         qtd = int(data.get('quantidade', 0))
     except:
         return jsonify({'sucesso': False, 'mensagem': 'Quantidade deve ser um número'}), 400
-        
     obs = (data.get('observacoes') or '').strip()
     if qtd <= 0:
         return jsonify({'sucesso': False, 'mensagem': 'Quantidade deve ser positiva'}), 400
-    
     r = retirar_estoque(get_empresa_id(), pid, qtd, obs)
     if not r.get('sucesso'):
         return jsonify(r), 400
@@ -496,8 +528,7 @@ def api_criar_pedido():
 
     r = criar_pedido(get_empresa_id(), cliente, data_pedido, itens, vendedor_id, obs,
                     data_entrega=data_entrega, mensagem_cliente=mensagem_cliente,
-                    forma_pagamento=forma_pagamento,
-                    comissao_valor=comissao_valor)
+                    forma_pagamento=forma_pagamento, comissao_valor=comissao_valor)
     if not r.get('sucesso'):
         return jsonify(r), 400
     return jsonify(r), 201
@@ -523,7 +554,10 @@ def api_pedido_detalhe(pid):
     d = obter_pedido_detalhado(get_empresa_id(), pid)
     if not d:
         abort(404)
-    return jsonify(d)
+    # Retorna o pedido diretamente (não aninhado) para compatibilidade com o frontend
+    pedido = d['pedido']
+    pedido['itens'] = d['itens']
+    return jsonify(pedido)
 
 
 @app.route('/api/pedidos/<int:pid>/status', methods=['PUT'])
@@ -636,18 +670,18 @@ def api_dashboard():
 @app.route('/api/catalogo/fornecedores', methods=['GET'])
 @login_required
 def api_catalogo_fornecedores():
-    # Retorna lista de empresas do tipo fornecedor
     try:
         res = supabase.table('empresas').select('id, nome, email, telefone, endereco').eq('tipo', 'fornecedor').execute()
         return jsonify(res.data)
     except Exception as e:
         return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
 
+
 @app.route('/api/catalogo/fornecedores/<int:forn_id>/produtos', methods=['GET'])
 @login_required
 def api_catalogo_produtos(forn_id):
-    # Retorna lista de produtos de um fornecedor específico
     return jsonify(obter_produtos(forn_id))
+
 
 @app.route('/api/cliente/comprar', methods=['POST'])
 @login_required
@@ -674,7 +708,6 @@ def api_cliente_comprar():
     if qtd <= 0:
         return jsonify({'sucesso': False, 'mensagem': 'Quantidade deve ser maior que zero'}), 400
     
-    # Buscar produto para validar estoque e preço
     try:
         r_prod = supabase.table('produtos').select('nome, preco, quantidade').eq('id', prod_id).eq('empresa_id', forn_id).execute()
         if not r_prod.data:
@@ -684,10 +717,7 @@ def api_cliente_comprar():
         if prod['quantidade'] < qtd:
             return jsonify({'sucesso': False, 'mensagem': 'Estoque insuficiente no fornecedor'}), 400
 
-        # Obter nome do cliente da sessão ou banco
         cliente_empresa = session.get('empresa_nome', 'Cliente')
-            
-        # Preparar itens para o criar_pedido
         total = float(prod['preco']) * qtd
         itens = [{
             'produto_id': prod_id,
@@ -699,7 +729,6 @@ def api_cliente_comprar():
         data_hoje = datetime.date.today().strftime('%Y-%m-%d')
         cliente_nome_str = f"{cliente_empresa} ({session.get('user_nome', 'User')})"
         
-        # Cria o pedido (o criar_pedido já desconta estoque e gera histórico)
         r = criar_pedido(
             forn_id,
             cliente_nome_str,
@@ -721,11 +750,210 @@ def api_cliente_comprar():
 
 
 # ═══════════════════════════════════════════
+# AVISOS API
+# ═══════════════════════════════════════════
+
+@app.route('/api/avisos', methods=['GET'])
+@login_required
+def api_avisos():
+    nao_lidos = request.args.get('nao_lidos') == '1'
+    return jsonify(obter_avisos(get_empresa_id(), nao_lidos_somente=nao_lidos))
+
+
+@app.route('/api/avisos', methods=['POST'])
+@login_required
+def api_criar_aviso():
+    data = request.get_json(force=True, silent=True) or {}
+    titulo = (data.get('titulo') or '').strip()
+    if not titulo:
+        return jsonify({'sucesso': False, 'mensagem': 'Título é obrigatório'}), 400
+    r = criar_aviso(get_empresa_id(), data.get('tipo', 'info'), titulo,
+                    data.get('mensagem', ''), data.get('prioridade', 'normal'),
+                    data.get('data_agendada'))
+    return jsonify(r), 201 if r.get('sucesso') else 400
+
+
+@app.route('/api/avisos/<int:aid>/lido', methods=['PUT'])
+@login_required
+def api_marcar_aviso_lido(aid):
+    return jsonify(marcar_aviso_lido(get_empresa_id(), aid))
+
+
+@app.route('/api/avisos/<int:aid>', methods=['DELETE'])
+@login_required
+def api_deletar_aviso(aid):
+    return jsonify(deletar_aviso(get_empresa_id(), aid))
+
+
+@app.route('/api/avisos/count', methods=['GET'])
+@login_required
+def api_contar_avisos():
+    return jsonify({'count': contar_avisos_nao_lidos(get_empresa_id())})
+
+
+# ═══════════════════════════════════════════
+# PERFIL DA LOJA API
+# ═══════════════════════════════════════════
+
+@app.route('/api/perfil-loja', methods=['GET'])
+@login_required
+def api_get_perfil_loja():
+    return jsonify(obter_perfil_loja(get_empresa_id()) or {})
+
+
+@app.route('/api/perfil-loja', methods=['POST', 'PUT'])
+@login_required
+def api_salvar_perfil_loja():
+    data = request.get_json(force=True, silent=True) or {}
+    r = salvar_perfil_loja(
+        get_empresa_id(),
+        nome_loja=data.get('nome_loja'),
+        descricao=data.get('descricao'),
+        cor_principal=data.get('cor_principal'),
+        cor_secundaria=data.get('cor_secundaria'),
+        horario_funcionamento=data.get('horario_funcionamento'),
+        formas_pagamento=data.get('formas_pagamento'),
+        link_whatsapp=data.get('link_whatsapp'),
+        link_instagram=data.get('link_instagram'),
+        link_facebook=data.get('link_facebook'),
+    )
+    return jsonify(r)
+
+
+# ═══════════════════════════════════════════
+# NOTIFICAÇÕES API
+# ═══════════════════════════════════════════
+
+@app.route('/api/notificacoes', methods=['GET'])
+@login_required
+def api_notificacoes():
+    nao_lidas = request.args.get('nao_lidas') == '1'
+    return jsonify(obter_notificacoes(get_empresa_id(), nao_lidas_somente=nao_lidas))
+
+@app.route('/api/notificacoes', methods=['POST'])
+@login_required
+def api_criar_notificacao():
+    data = request.get_json(force=True, silent=True) or {}
+    r = criar_notificacao(
+        get_empresa_id(),
+        data.get('tipo', 'info'),
+        data.get('titulo', ''),
+        data.get('mensagem', ''),
+        cliente_id=data.get('cliente_id'),
+        fornecedor_id=data.get('fornecedor_id')
+    )
+    return jsonify(r), 201 if r.get('sucesso') else 400
+
+@app.route('/api/notificacoes/<int:nid>/lido', methods=['PUT'])
+@login_required
+def api_marcar_notificacao_lida(nid):
+    return jsonify(marcar_notificacao_lida(get_empresa_id(), nid))
+
+@app.route('/api/notificacoes/<int:nid>', methods=['DELETE'])
+@login_required
+def api_deletar_notificacao(nid):
+    return jsonify(deletar_notificacao(get_empresa_id(), nid))
+
+@app.route('/api/notificacoes/count', methods=['GET'])
+@login_required
+def api_contar_notificacoes():
+    return jsonify({'count': contar_notificacoes_nao_lidas(get_empresa_id())})
+
+
+# ═══════════════════════════════════════════
+# COMPARTILHAMENTO DE VITRINE API
+# ═══════════════════════════════════════════
+
+@app.route('/api/vitrine/compartilhar', methods=['POST'])
+@login_required
+def api_compartilhar_vitrine():
+    if session.get('empresa_tipo') != 'fornecedor':
+        return jsonify({'sucesso': False, 'mensagem': 'Apenas fornecedores podem compartilhar'}), 403
+
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        cliente_id = int(data.get('cliente_id'))
+        metodo = (data.get('metodo') or 'convite').strip()
+    except:
+        return jsonify({'sucesso': False, 'mensagem': 'Dados inválidos'}), 400
+
+    r = compartilhar_vitrine(get_empresa_id(), cliente_id, metodo)
+    if r.get('sucesso'):
+        if metodo == 'convite':
+            criar_notificacao(
+                cliente_id,
+                'convite',
+                f'{session.get("empresa_nome")} compartilhou sua vitrine com você!',
+                f'Acesse o catálogo de produtos de {session.get("empresa_nome")}',
+                cliente_id=cliente_id,
+                fornecedor_id=get_empresa_id()
+            )
+    return jsonify(r), 201 if r.get('sucesso') else 400
+
+@app.route('/api/vitrine/fornecedores', methods=['GET'])
+@login_required
+def api_obter_fornecedores_compartilhados():
+    if session.get('empresa_tipo') != 'cliente':
+        return jsonify({'sucesso': False, 'mensagem': 'Apenas clientes podem acessar'}), 403
+
+    aceitos = request.args.get('aceitos') == '1'
+    return jsonify(obter_fornecedores_compartilhados(get_empresa_id(), aceitos_somente=aceitos))
+
+@app.route('/api/vitrine/<int:comp_id>/aceitar', methods=['PUT'])
+@login_required
+def api_aceitar_compartilhamento(comp_id):
+    if session.get('empresa_tipo') != 'cliente':
+        return jsonify({'sucesso': False, 'mensagem': 'Apenas clientes'}), 403
+    return jsonify(aceitar_compartilhamento(get_empresa_id(), comp_id))
+
+@app.route('/api/vitrine/<int:forn_id>/visitantes', methods=['GET'])
+@login_required
+def api_obter_visitantes(forn_id):
+    if session.get('empresa_tipo') != 'fornecedor' or get_empresa_id() != forn_id:
+        return jsonify({'sucesso': False, 'mensagem': 'Acesso negado'}), 403
+    return jsonify(obter_visitantes_vitrine(forn_id))
+
+
+# ═══════════════════════════════════════════
+# RELATÓRIOS API
+# ═══════════════════════════════════════════
+
+@app.route('/api/relatorio/fornecedor', methods=['GET'])
+@login_required
+def api_relatorio_fornecedor():
+    if session.get('empresa_tipo') != 'fornecedor':
+        return jsonify({'sucesso': False, 'mensagem': 'Apenas fornecedores'}), 403
+    return jsonify(obter_relatorio_fornecedor(get_empresa_id()))
+
+@app.route('/api/relatorio/cliente', methods=['GET'])
+@login_required
+def api_relatorio_cliente():
+    if session.get('empresa_tipo') != 'cliente':
+        return jsonify({'sucesso': False, 'mensagem': 'Apenas clientes'}), 403
+    return jsonify(obter_relatorio_cliente(get_empresa_id()))
+
+
+# ═══════════════════════════════════════════
+# LISTAGENS GERAIS
+# ═══════════════════════════════════════════
+
+@app.route('/api/fornecedores', methods=['GET'])
+@login_required
+def api_listar_fornecedores():
+    return jsonify(listar_fornecedores())
+
+
+@app.route('/api/clientes', methods=['GET'])
+@login_required
+def api_listar_clientes():
+    return jsonify(listar_clientes())
+
+
+# ═══════════════════════════════════════════
 # START
 # ═══════════════════════════════════════════
 
 init_db()
 
 if __name__ == '__main__':
-    # Em produção, use um servidor como Gunicorn
     app.run(debug=True, port=8080)

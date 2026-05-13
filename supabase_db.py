@@ -195,12 +195,22 @@ def criar_produto(empresa_id, nome, sku='', categoria_id=None, custo=0, preco=0,
 
 def obter_produtos(empresa_id):
     try:
-        res = supabase.table('produtos').select('*, categorias(nome)').eq('empresa_id', empresa_id).order('id', desc=True).execute()
-        produtos = res.data
-        for p in produtos:
-            p['categoria_nome'] = p.get('categorias', {}).get('nome', '') if p.get('categorias') else ''
+        res = supabase.table('produtos').select('*').eq('empresa_id', empresa_id).order('id', desc=True).execute()
+        produtos = res.data or []
+        # Buscar categorias separadamente para garantir dados
+        if produtos:
+            cat_ids = set(p.get('categoria_id') for p in produtos if p.get('categoria_id'))
+            if cat_ids:
+                cats = supabase.table('categorias').select('id, nome').eq('empresa_id', empresa_id).execute().data or []
+                cat_map = {c['id']: c['nome'] for c in cats}
+                for p in produtos:
+                    p['categoria_nome'] = cat_map.get(p.get('categoria_id'), '')
+            else:
+                for p in produtos:
+                    p['categoria_nome'] = ''
         return produtos
-    except:
+    except Exception as e:
+        print(f"Erro em obter_produtos: {e}")
         return []
 
 def obter_produto(empresa_id, produto_id):
@@ -589,3 +599,200 @@ def listar_clientes():
         return res.data
     except:
         return []
+
+# ═══════════════════════════════════════════
+# NOTIFICAÇÕES DIRECIONADAS
+# ═══════════════════════════════════════════
+
+def criar_notificacao(empresa_id, tipo, titulo, mensagem='', cliente_id=None, fornecedor_id=None):
+    """Cria notificação direcionada para cliente específico"""
+    try:
+        data = {
+            'empresa_id': empresa_id,
+            'tipo': tipo,  # 'novo_produto', 'promocao', 'convite', 'pedido_atualizado'
+            'titulo': titulo,
+            'mensagem': mensagem,
+            'cliente_id': cliente_id,
+            'fornecedor_id': fornecedor_id,
+            'lida': False
+        }
+        res = supabase.table('notificacoes').insert(data).execute()
+        return {'sucesso': True, 'id': res.data[0]['id'] if res.data else None}
+    except Exception as e:
+        return {'sucesso': False, 'mensagem': str(e)}
+
+def obter_notificacoes(empresa_id, nao_lidas_somente=False):
+    """Obtém notificações para um cliente"""
+    try:
+        query = supabase.table('notificacoes').select('*').eq('cliente_id', empresa_id)
+        if nao_lidas_somente:
+            query = query.eq('lida', False)
+        res = query.order('criado_em', desc=True).execute()
+        return res.data or []
+    except:
+        return []
+
+def marcar_notificacao_lida(empresa_id, notificacao_id):
+    """Marca notificação como lida"""
+    try:
+        supabase.table('notificacoes').update({'lida': True}).eq('id', notificacao_id).eq('cliente_id', empresa_id).execute()
+        return {'sucesso': True}
+    except Exception as e:
+        return {'sucesso': False, 'mensagem': str(e)}
+
+def deletar_notificacao(empresa_id, notificacao_id):
+    """Deleta notificação"""
+    try:
+        supabase.table('notificacoes').delete().eq('id', notificacao_id).eq('cliente_id', empresa_id).execute()
+        return {'sucesso': True}
+    except Exception as e:
+        return {'sucesso': False, 'mensagem': str(e)}
+
+def contar_notificacoes_nao_lidas(empresa_id):
+    """Conta notificações não lidas"""
+    try:
+        res = supabase.table('notificacoes').select('id', count='exact').eq('cliente_id', empresa_id).eq('lida', False).execute()
+        return res.count or 0
+    except:
+        return 0
+
+# ═══════════════════════════════════════════
+# COMPARTILHAMENTO DE VITRINE
+# ═══════════════════════════════════════════
+
+def compartilhar_vitrine(fornecedor_id, cliente_id, metodo='convite'):
+    """Registra compartilhamento de vitrine (convite ou link)"""
+    try:
+        # Verifica se já foi compartilhado
+        existing = supabase.table('vitrines_compartilhadas').select('id').eq('fornecedor_id', fornecedor_id).eq('cliente_id', cliente_id).execute()
+        if existing.data:
+            return {'sucesso': True, 'mensagem': 'Já compartilhado', 'id': existing.data[0]['id']}
+
+        data = {
+            'fornecedor_id': fornecedor_id,
+            'cliente_id': cliente_id,
+            'metodo': metodo,  # 'convite' ou 'link'
+            'aceito': False
+        }
+        res = supabase.table('vitrines_compartilhadas').insert(data).execute()
+        return {'sucesso': True, 'id': res.data[0]['id'] if res.data else None}
+    except Exception as e:
+        return {'sucesso': False, 'mensagem': str(e)}
+
+def aceitar_compartilhamento(cliente_id, compartilhamento_id):
+    """Cliente aceita compartilhamento de vitrine"""
+    try:
+        supabase.table('vitrines_compartilhadas').update({'aceito': True}).eq('id', compartilhamento_id).eq('cliente_id', cliente_id).execute()
+        return {'sucesso': True}
+    except Exception as e:
+        return {'sucesso': False, 'mensagem': str(e)}
+
+def obter_fornecedores_compartilhados(cliente_id, aceitos_somente=False):
+    """Obtém fornecedores que compartilharam vitrine com cliente"""
+    try:
+        query = supabase.table('vitrines_compartilhadas').select('*, empresas(id, nome, email, telefone, endereco)').eq('cliente_id', cliente_id)
+        if aceitos_somente:
+            query = query.eq('aceito', True)
+        res = query.order('criado_em', desc=True).execute()
+
+        fornecedores = []
+        for item in (res.data or []):
+            if item.get('empresas'):
+                forn = item['empresas']
+                forn['compartilhamento_id'] = item['id']
+                forn['aceito'] = item['aceito']
+                forn['metodo'] = item['metodo']
+                forn['criado_em'] = item['criado_em']
+                fornecedores.append(forn)
+        return fornecedores
+    except Exception as e:
+        print(f"Erro em obter_fornecedores_compartilhados: {e}")
+        return []
+
+def registrar_visita_vitrine(fornecedor_id, cliente_id):
+    """Registra quando um cliente visita a vitrine de um fornecedor"""
+    try:
+        data = {
+            'fornecedor_id': fornecedor_id,
+            'cliente_id': cliente_id,
+            'visitado_em': 'now()'
+        }
+        supabase.table('visitantes_vitrine').insert(data).execute()
+        return {'sucesso': True}
+    except:
+        pass  # Não interrompe se falhar
+
+def obter_visitantes_vitrine(fornecedor_id):
+    """Obtém lista de visitantes da vitrine de um fornecedor"""
+    try:
+        res = supabase.table('visitantes_vitrine').select('*, empresas(id, nome, email, telefone)').eq('fornecedor_id', fornecedor_id).order('visitado_em', desc=True).execute()
+
+        visitantes = []
+        for item in (res.data or []):
+            if item.get('empresas'):
+                vis = item['empresas']
+                vis['visitado_em'] = item['visitado_em']
+                visitantes.append(vis)
+        return visitantes
+    except:
+        return []
+
+# ═══════════════════════════════════════════
+# RELATÓRIOS
+# ═══════════════════════════════════════════
+
+def obter_relatorio_fornecedor(fornecedor_id):
+    """Relatório completo para fornecedor"""
+    try:
+        prods = supabase.table('produtos').select('id, quantidade, preco, custo').eq('empresa_id', fornecedor_id).execute().data or []
+        pedidos = supabase.table('pedidos').select('id, total, status, criado_em').eq('empresa_id', fornecedor_id).execute().data or []
+        visitantes = obter_visitantes_vitrine(fornecedor_id)
+        compartilhamentos = supabase.table('vitrines_compartilhadas').select('id, cliente_id, aceito, criado_em').eq('fornecedor_id', fornecedor_id).execute().data or []
+
+        total_produtos = len(prods)
+        valor_estoque = sum(p.get('quantidade', 0) * p.get('preco', 0) for p in prods)
+        total_vendas = sum(p.get('total', 0) for p in pedidos)
+        total_pedidos = len(pedidos)
+        pedidos_pendentes = sum(1 for p in pedidos if p.get('status') == 'pendente')
+
+        return {
+            'total_produtos': total_produtos,
+            'valor_estoque': valor_estoque,
+            'total_pedidos': total_pedidos,
+            'total_vendas': total_vendas,
+            'pedidos_pendentes': pedidos_pendentes,
+            'visitantes_vitrine': len(visitantes),
+            'compartilhamentos_total': len(compartilhamentos),
+            'compartilhamentos_aceitos': sum(1 for c in compartilhamentos if c.get('aceito')),
+            'visitantes': visitantes[:10],  # Últimos 10
+            'pedidos_recentes': pedidos[-5:] if pedidos else []  # Últimos 5
+        }
+    except Exception as e:
+        print(f"Erro em obter_relatorio_fornecedor: {e}")
+        return {}
+
+def obter_relatorio_cliente(cliente_id):
+    """Relatório completo para cliente"""
+    try:
+        pedidos = supabase.table('pedidos').select('id, total, status, criado_em').eq('cliente_id', cliente_id).execute().data or []
+        fornecedores = obter_fornecedores_compartilhados(cliente_id)
+        notificacoes = supabase.table('notificacoes').select('id, lida, criado_em').eq('cliente_id', cliente_id).execute().data or []
+
+        total_pedidos = len(pedidos)
+        total_gasto = sum(p.get('total', 0) for p in pedidos)
+        pedidos_pendentes = sum(1 for p in pedidos if p.get('status') == 'pendente')
+
+        return {
+            'total_pedidos': total_pedidos,
+            'total_gasto': total_gasto,
+            'pedidos_pendentes': pedidos_pendentes,
+            'fornecedores_compartilhados': len(fornecedores),
+            'fornecedores_aceitos': sum(1 for f in fornecedores if f.get('aceito')),
+            'notificacoes_nao_lidas': sum(1 for n in notificacoes if not n.get('lida')),
+            'fornecedores': fornecedores[:10],  # Últimos 10
+            'pedidos_recentes': pedidos[-5:] if pedidos else []  # Últimos 5
+        }
+    except Exception as e:
+        print(f"Erro em obter_relatorio_cliente: {e}")
+        return {}
+
