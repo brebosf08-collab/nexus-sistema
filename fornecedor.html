@@ -134,6 +134,7 @@
   <button class="nav-item active" data-sec="dashboard" onclick="navTo('dashboard')"><i class="fas fa-chart-pie"></i> Dashboard</button>
 
   <div class="nav-label">Estoque</div>
+  <button class="nav-item" data-sec="resumo" onclick="navTo('resumo')"><i class="fas fa-chart-bar"></i> Resumo de Estoque</button>
   <button class="nav-item" data-sec="estoque" onclick="navTo('estoque')"><i class="fas fa-box"></i> Inventário</button>
   <button class="nav-item" data-sec="categorias" onclick="navTo('categorias')"><i class="fas fa-tags"></i> Categorias</button>
 
@@ -198,6 +199,26 @@
     <div id="alertas-estoque" style="display:none" class="card">
       <h3><i class="fas fa-triangle-exclamation" style="color:var(--amber)"></i> Produtos com Estoque Baixo</h3>
       <div class="table-wrap"><table><thead><tr><th>Produto</th><th>Estoque Atual</th><th>Mínimo</th><th>Ação</th></tr></thead><tbody id="tb-alertas"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- RESUMO DE ESTOQUE -->
+  <div id="sec-resumo" class="sec">
+    <div class="page-title"><i class="fas fa-chart-bar"></i> Resumo de Estoque</div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="label">Total de Produtos</div><div class="value" id="r-total-prods">0</div><i class="fas fa-boxes"></i></div>
+      <div class="stat-card"><div class="label">Quantidade Total</div><div class="value" id="r-total-qtd">0</div><i class="fas fa-cubes"></i></div>
+      <div class="stat-card"><div class="label">Valor Total em Estoque</div><div class="value" id="r-total-valor" style="color:var(--green)">R$ 0</div><i class="fas fa-money-bill-trend-up"></i></div>
+      <div class="stat-card"><div class="label">Produtos com Alerta</div><div class="value" id="r-alertas" style="color:var(--amber)">0</div><i class="fas fa-triangle-exclamation"></i></div>
+    </div>
+    <div class="card">
+      <h3>Produtos em Estoque</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Produto</th><th>Categoria</th><th>Quantidade</th><th>Custo Unit.</th><th>Valor Total</th><th>Status</th></tr></thead>
+          <tbody id="tb-resumo-estoque"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -399,7 +420,7 @@ function navTo(sec) {
   if (el) el.classList.add('active');
   document.querySelectorAll('.nav-item[data-sec="' + sec + '"]').forEach(n => n.classList.add('active'));
   // Carrega dados da seção
-  const loaders = { estoque: loadEstoque, categorias: loadCategorias, pedidos: loadPedidos, vendedores: loadVendedores, reunioes: loadReunioes, contatos: loadContatos, historico: loadHistorico, metas: loadMetas };
+  const loaders = { resumo: loadResumoEstoque, estoque: loadEstoque, categorias: loadCategorias, pedidos: loadPedidos, vendedores: loadVendedores, reunioes: loadReunioes, contatos: loadContatos, historico: loadHistorico, metas: loadMetas };
   if (loaders[sec]) loaders[sec]();
 }
 
@@ -463,8 +484,45 @@ async function loadDashboard() {
       loadAlertasEstoque();
       notif(`⚠️ ${d.alertas_reposicao} produto(s) com estoque baixo!`, 'warn');
     }
-  } catch(e) { console.error(e); }
+  } catch(e) { console.error('Erro ao carregar dashboard:', e); }
   loadGrafico('semana');
+}
+
+// ── RESUMO DE ESTOQUE ────────────────────────────────────────────
+async function loadResumoEstoque() {
+  try {
+    const prods = await api('/api/produtos');
+    let totalPrds = prods.length;
+    let totalQtd = 0;
+    let totalValor = 0;
+    let alertas = 0;
+    
+    prods.forEach(p => {
+      totalQtd += p.quantidade || 0;
+      totalValor += (p.quantidade || 0) * (p.custo || 0);
+      if (p.quantidade <= p.minimo) alertas++;
+    });
+    
+    document.getElementById('r-total-prods').textContent = totalPrds;
+    document.getElementById('r-total-qtd').textContent = totalQtd;
+    document.getElementById('r-total-valor').textContent = fmt(totalValor);
+    document.getElementById('r-alertas').textContent = alertas;
+    
+    const tb = document.getElementById('tb-resumo-estoque');
+    tb.innerHTML = prods.length ? prods.map(p => {
+      const status = p.quantidade === 0 ? 'badge-zero' : p.quantidade <= p.minimo ? 'badge-low' : 'badge-ok';
+      const statusTxt = p.quantidade === 0 ? 'Zerado' : p.quantidade <= p.minimo ? 'Baixo' : 'OK';
+      const valorTotal = (p.quantidade || 0) * (p.custo || 0);
+      return `<tr>
+        <td><b>${p.nome}</b></td>
+        <td>${p.categoria_nome || '-'}</td>
+        <td><b>${p.quantidade}</b></td>
+        <td>${fmt(p.custo)}</td>
+        <td style="color:var(--green)">${fmt(valorTotal)}</td>
+        <td><span class="badge ${status}">${statusTxt}</span></td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:2rem">Nenhum produto cadastrado</td></tr>';
+  } catch(e) { console.error('Erro ao carregar resumo:', e); }
 }
 
 async function loadAlertasEstoque() {

@@ -938,7 +938,6 @@ def api_relatorio_cliente():
 # ═══════════════════════════════════════════
 
 @app.route('/api/fornecedores', methods=['GET'])
-@login_required
 def api_listar_fornecedores():
     return jsonify(listar_fornecedores())
 

@@ -84,13 +84,9 @@
   </div>
 
   <section>
-    <h3 class="section-title">Fornecedores Recomendados</h3>
-    <div class="grid-fornecedores">
-      <div class="forn-card" tabindex="0">
-        <h4 style="margin: 0 0 10px;">Distribuidora Global</h4>
-        <p style="font-size: 0.85rem; color: #606070;">Tecnologia e Logística</p>
-        <button style="width: 100%; background: var(--accent); border: none; color: #fff; height: 40px; border-radius: 10px; font-weight: 700; margin-top: 15px; cursor: pointer;">Ver Catálogo</button>
-      </div>
+    <h3 class="section-title">Explorar Fornecedores</h3>
+    <div class="grid-fornecedores" id="grid-fornecedores">
+      <div style="grid-column: 1/-1; text-align: center; color: #606070; padding: 2rem;">Carregando fornecedores...</div>
     </div>
   </section>
 </main>
@@ -116,6 +112,38 @@
     document.getElementById('pedidosAtivos').textContent = '0';
     document.getElementById('fornecedoresSalvos').textContent = '0';
   })();
+
+  async function carregarFornecedores() {
+    try {
+      const response = await fetch('/api/fornecedores');
+      const fornecedores = await response.json();
+      const grid = document.getElementById('grid-fornecedores');
+      
+      if (!fornecedores || fornecedores.length === 0) {
+        grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #606070; padding: 2rem;">Nenhum fornecedor disponível no momento</div>';
+        return;
+      }
+      
+      grid.innerHTML = fornecedores.map(f => `
+        <div class="forn-card" tabindex="0">
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+            <div>
+              <h4 style="margin: 0 0 5px; color: #fff;">${f.nome || f.empresa_nome}</h4>
+              <p style="font-size: 0.75rem; color: #606070; margin: 0;">Código: <b>${f.id}</b></p>
+            </div>
+          </div>
+          <p style="font-size: 0.85rem; color: #808090; margin: 10px 0 0 0;">${f.descricao || 'Fornecedor registrado na plataforma'}</p>
+          <button onclick="window.location.href='/loja/${f.id}'" style="width: 100%; background: var(--accent); border: none; color: #fff; height: 40px; border-radius: 10px; font-weight: 700; margin-top: 15px; cursor: pointer;">Ver Catálogo</button>
+        </div>
+      `).join('');
+    } catch(e) {
+      console.error('Erro ao carregar fornecedores:', e);
+      document.getElementById('grid-fornecedores').innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #c84a52; padding: 2rem;">Erro ao carregar fornecedores</div>';
+    }
+  }
+
+  // Carrega fornecedores quando página carrega
+  document.addEventListener('DOMContentLoaded', carregarFornecedores);
 
   function logout() {
     localStorage.removeItem('nexus_user');
