@@ -302,6 +302,27 @@ def deletar_vendedor(empresa_id, vendedor_id):
 
 def criar_pedido(empresa_id, cliente_nome, data, itens, vendedor_id=None, observacoes='', cliente_id=None, data_entrega=None, mensagem_cliente='', forma_pagamento=None, comissao_valor=0):
     try:
+        if not itens:
+            return {'sucesso': False, 'mensagem': 'Adicione ao menos um item ao pedido.'}
+
+        produto_ids = [int(i['produto_id']) for i in itens]
+        prod_res = supabase.table('produtos').select('id, nome, quantidade').eq('empresa_id', empresa_id).in_('id', produto_ids).execute()
+        produtos = {int(p['id']): p for p in (prod_res.data or [])}
+
+        for item in itens:
+            produto_id = int(item['produto_id'])
+            quantidade = int(item['quantidade'])
+            produto = produtos.get(produto_id)
+            if not produto:
+                return {'sucesso': False, 'mensagem': 'Produto não encontrado no estoque.'}
+            if quantidade <= 0:
+                return {'sucesso': False, 'mensagem': 'Quantidade do item deve ser positiva.'}
+            if int(produto.get('quantidade') or 0) < quantidade:
+                return {
+                    'sucesso': False,
+                    'mensagem': f"Estoque insuficiente para {produto.get('nome', 'produto')}. Disponível: {produto.get('quantidade') or 0}."
+                }
+
         total = sum(float(i['subtotal']) for i in itens)
         qtd_itens = sum(int(i['quantidade']) for i in itens)
         
@@ -335,8 +356,8 @@ def criar_pedido(empresa_id, cliente_nome, data, itens, vendedor_id=None, observ
             # Atualizar estoque
             r = supabase.table('produtos').select('quantidade').eq('id', item['produto_id']).eq('empresa_id', empresa_id).execute()
             if r.data:
-                nova_qtd = max(0, r.data[0]['quantidade'] - int(item['quantidade']))
-                supabase.table('produtos').update({'quantidade': nova_qtd}).eq('id', item['produto_id']).execute()
+                nova_qtd = r.data[0]['quantidade'] - int(item['quantidade'])
+                supabase.table('produtos').update({'quantidade': nova_qtd}).eq('id', item['produto_id']).eq('empresa_id', empresa_id).execute()
                 supabase.table('historico').insert({
                     "empresa_id": empresa_id,
                     "produto_id": item['produto_id'],

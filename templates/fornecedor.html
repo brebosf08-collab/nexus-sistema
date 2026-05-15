@@ -85,6 +85,18 @@
     .meta-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1.25rem;}
     .meta-progress{height:10px;background:rgba(255,255,255,0.05);border-radius:5px;overflow:hidden;margin:0.75rem 0 0.4rem;}
     .meta-bar{height:100%;border-radius:5px;transition:width 0.6s ease;}
+    .inventory-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:1.25rem;}
+    .inventory-summary .mini-stat{background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:14px;padding:1rem;}
+    .mini-stat .mini-label{font-size:0.68rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.35rem;}
+    .mini-stat .mini-value{font-family:'Space Grotesk',sans-serif;font-size:1.25rem;font-weight:800;}
+    .inventory-toolbar{display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem;}
+    .inventory-toolbar input,.inventory-toolbar select{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;color:#fff;padding:0.6rem 0.9rem;font-size:0.85rem;}
+    .inventory-toolbar input{min-width:220px;flex:1;}
+    .inventory-toolbar select option{background:#1a1a2e;color:#fff;}
+    .stock-pill{font-size:0.72rem;color:var(--muted);display:block;margin-top:0.25rem;}
+    .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:1000;padding:2rem;overflow:auto;}
+    .modal-panel{max-width:520px;margin:0 auto;background:#09090b;border:1px solid rgba(255,255,255,0.08);border-radius:24px;padding:2rem;position:relative;}
+    .modal-close{position:absolute;top:18px;right:18px;border:none;background:rgba(255,255,255,0.08);color:#fff;border-radius:999px;width:36px;height:36px;cursor:pointer;}
     .chart-container{position:relative;height:240px;margin-top:1rem;}
     .vitrine-box{background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:16px;padding:1.25rem;display:flex;gap:1rem;align-items:center;flex-wrap:wrap;}
     .vitrine-box input{flex:1;background:transparent;border:none;color:var(--accent);font-weight:700;font-size:1rem;min-width:200px;}
@@ -237,9 +249,31 @@
       <div id="msg-prod" class="msg"></div>
     </div>
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:1rem;flex-wrap:wrap">
         <h3 style="margin:0">Produtos Cadastrados</h3>
-        <input id="busca-produto" style="width:220px;padding:0.5rem 1rem;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;color:#fff;font-size:0.85rem" placeholder="Buscar...">
+        <button class="btn btn-outline btn-sm" onclick="exportarEstoqueCSV()"><i class="fas fa-file-export"></i> Exportar CSV</button>
+      </div>
+      <div class="inventory-summary">
+        <div class="mini-stat"><div class="mini-label">Itens cadastrados</div><div class="mini-value" id="inv-total">0</div></div>
+        <div class="mini-stat"><div class="mini-label">Unidades em estoque</div><div class="mini-value" id="inv-unidades">0</div></div>
+        <div class="mini-stat"><div class="mini-label">Valor de venda</div><div class="mini-value" id="inv-venda" style="color:var(--green)">R$ 0</div></div>
+        <div class="mini-stat"><div class="mini-label">Alertas</div><div class="mini-value" id="inv-alertas" style="color:var(--amber)">0</div></div>
+      </div>
+      <div class="inventory-toolbar">
+        <input id="busca-produto" placeholder="Buscar por produto, SKU ou categoria...">
+        <select id="filtro-status-produto" onchange="aplicarFiltrosEstoque()">
+          <option value="todos">Todos os status</option>
+          <option value="ok">Estoque OK</option>
+          <option value="baixo">Estoque baixo</option>
+          <option value="zerado">Zerados</option>
+        </select>
+        <select id="ordem-produto" onchange="aplicarFiltrosEstoque()">
+          <option value="nome">Ordenar por nome</option>
+          <option value="menor_estoque">Menor estoque</option>
+          <option value="maior_estoque">Maior estoque</option>
+          <option value="maior_valor">Maior valor</option>
+          <option value="maior_margem">Maior margem</option>
+        </select>
       </div>
       <div class="table-wrap">
         <table><thead><tr><th>Produto</th><th>Categoria</th><th>Custo</th><th>Venda</th><th>Margem</th><th>Tempos</th><th>Estoque</th><th>Status</th><th>Ações</th></tr></thead>
@@ -439,6 +473,22 @@
 
 <div class="notif-bar" id="notif-bar"></div>
 
+<div id="modal-ajuste-estoque" class="modal-backdrop">
+  <div class="modal-panel">
+    <button class="modal-close" onclick="fecharAjusteEstoque()"><i class="fas fa-times"></i></button>
+    <h2 id="ajuste-titulo" style="margin-bottom:0.35rem;">Ajustar Estoque</h2>
+    <div id="ajuste-produto" style="color:var(--muted);font-size:0.9rem;margin-bottom:1.25rem;"></div>
+    <div style="display:grid;gap:1rem;">
+      <div class="field"><label>Quantidade</label><input id="ajuste-quantidade" type="number" min="1" value="1"></div>
+      <div class="field"><label>Observação</label><textarea id="ajuste-observacao" placeholder="Ex: Compra do fornecedor, avaria, conferência..."></textarea></div>
+      <div style="display:flex;justify-content:flex-end;gap:1rem;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-outline" onclick="fecharAjusteEstoque()">Cancelar</button>
+        <button class="btn btn-primary" onclick="confirmarAjusteEstoque()"><i class="fas fa-check"></i> Confirmar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="modal-pedido-editar" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:1000;padding:2rem;overflow:auto;">
   <div style="max-width:560px;margin:0 auto;background:#09090b;border:1px solid rgba(255,255,255,0.08);border-radius:24px;padding:2rem;position:relative;">
     <button onclick="fecharPedidoDetalhe()" style="position:absolute;top:18px;right:18px;border:none;background:rgba(255,255,255,0.08);color:#fff;border-radius:999px;width:36px;height:36px;cursor:pointer;"><i class="fas fa-times"></i></button>
@@ -617,38 +667,82 @@ async function verificarReunioes(){
 
 // ── ESTOQUE ────────────────────────────────────────────────────
 let todosProds=[];
+let ajusteAtual=null;
 async function loadEstoque(){
-  try{todosProds=await api('/api/produtos');renderEstoque(todosProds);await loadCategoriasSelect();}catch(e){console.error(e);}
+  try{todosProds=await api('/api/produtos');aplicarFiltrosEstoque();await loadCategoriasSelect();}catch(e){console.error(e);}
+}
+function statusProduto(p){
+  const q=Number(p.quantidade||0),m=Number(p.minimo||0);
+  if(q===0)return 'zerado';
+  if(q<=m)return 'baixo';
+  return 'ok';
+}
+function escapeHtml(v){
+  return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function margemProduto(p){
+  const preco=Number(p.preco||0),custo=Number(p.custo||0);
+  return preco>0?((preco-custo)/preco)*100:0;
+}
+function renderResumoEstoque(prods){
+  const total=prods.length;
+  const unidades=prods.reduce((s,p)=>s+Number(p.quantidade||0),0);
+  const valorVenda=prods.reduce((s,p)=>s+Number(p.preco||0)*Number(p.quantidade||0),0);
+  const alertas=prods.filter(p=>statusProduto(p)!=='ok').length;
+  document.getElementById('inv-total').textContent=total;
+  document.getElementById('inv-unidades').textContent=unidades;
+  document.getElementById('inv-venda').textContent=fmt(valorVenda);
+  document.getElementById('inv-alertas').textContent=alertas;
+}
+function aplicarFiltrosEstoque(){
+  const termo=(document.getElementById('busca-produto')?.value||'').toLowerCase().trim();
+  const status=document.getElementById('filtro-status-produto')?.value||'todos';
+  const ordem=document.getElementById('ordem-produto')?.value||'nome';
+  let lista=[...todosProds].filter(p=>{
+    const texto=[p.nome,p.sku,p.categoria_nome].join(' ').toLowerCase();
+    return (!termo||texto.includes(termo))&&(status==='todos'||statusProduto(p)===status);
+  });
+  lista.sort((a,b)=>{
+    if(ordem==='menor_estoque')return Number(a.quantidade||0)-Number(b.quantidade||0);
+    if(ordem==='maior_estoque')return Number(b.quantidade||0)-Number(a.quantidade||0);
+    if(ordem==='maior_valor')return (Number(b.preco||0)*Number(b.quantidade||0))-(Number(a.preco||0)*Number(a.quantidade||0));
+    if(ordem==='maior_margem')return margemProduto(b)-margemProduto(a);
+    return String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR');
+  });
+  renderResumoEstoque(lista);
+  renderEstoque(lista);
 }
 function renderEstoque(prods){
   const tb=document.getElementById('tb-estoque');
   tb.innerHTML=prods.length?prods.map(p=>{
     const q=Number(p.quantidade||0),m=Number(p.minimo||0);
-    const st=q===0?'badge-zero':q<=m?'badge-low':'badge-ok';
-    const stTxt=q===0?'Zerado':q<=m?'Baixo':'OK';
-    const margem=p.preco&&p.custo?Math.round(((p.preco-p.custo)/p.preco)*100)+'%':'-';
+    const status=statusProduto(p);
+    const st=status==='zerado'?'badge-zero':status==='baixo'?'badge-low':'badge-ok';
+    const stTxt=status==='zerado'?'Zerado':status==='baixo'?'Baixo':'OK';
+    const margem=p.preco?Math.round(margemProduto(p))+'%':'-';
+    const valorLinha=Number(p.preco||0)*q;
     const tempos=[
       p.tempo_preparo?`⏱ Prep: ${p.tempo_preparo} ${p.tempo_preparo_unidade||'min'}`:'',
       p.tempo_entrega?`🚚 Entr: ${p.tempo_entrega} ${p.tempo_entrega_unidade||'min'}`:'',
       p.tempo_producao?`🏭 Prod: ${p.tempo_producao} ${p.tempo_producao_unidade||'min'}`:''
     ].filter(Boolean).join('<br>');
     return `<tr>
-      <td><b>${p.nome}</b>${p.sku?'<br><small style="color:var(--muted)">'+p.sku+'</small>':''}</td>
-      <td>${p.categoria_nome||'-'}</td><td>${fmt(p.custo)}</td><td>${fmt(p.preco)}</td>
+      <td><b>${escapeHtml(p.nome)}</b>${p.sku?'<br><small style="color:var(--muted)">'+escapeHtml(p.sku)+'</small>':''}</td>
+      <td>${escapeHtml(p.categoria_nome||'-')}</td><td>${fmt(p.custo)}</td><td>${fmt(p.preco)}<span class="stock-pill">Total: ${fmt(valorLinha)}</span></td>
       <td style="color:var(--green)">${margem}</td>
       <td style="font-size:0.78rem;color:var(--amber)">${tempos||'-'}</td>
       <td><b>${q}</b> / mín ${m}</td>
       <td><span class="badge ${st}">${stTxt}</span></td>
       <td style="display:flex;gap:0.4rem;flex-wrap:wrap">
-        <button class="btn btn-sm btn-success" onclick="ajuste(${p.id},'entrada')" title="Entrada"><i class="fas fa-plus"></i></button>
-        <button class="btn btn-sm btn-danger" onclick="ajuste(${p.id},'saida')" title="Saída"><i class="fas fa-minus"></i></button>
-        <button class="btn btn-sm btn-danger" onclick="delProd(${p.id},'${p.nome.replace(/'/g,"\\'")}')" title="Excluir"><i class="fas fa-trash"></i></button>
+        <button class="btn btn-sm btn-success" onclick="abrirAjusteEstoque(${p.id},'entrada')" title="Entrada"><i class="fas fa-plus"></i></button>
+        <button class="btn btn-sm btn-danger" onclick="abrirAjusteEstoque(${p.id},'saida')" title="Saída"><i class="fas fa-minus"></i></button>
+        <button class="btn btn-sm btn-danger" onclick="delProd(${p.id},'${String(p.nome||'').replace(/'/g,"\\'")}')" title="Excluir"><i class="fas fa-trash"></i></button>
       </td></tr>`;
   }).join(''):'<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:2rem">Nenhum produto</td></tr>';
 }
 document.addEventListener('DOMContentLoaded',()=>{
   const b=document.getElementById('busca-produto');
-  if(b)b.addEventListener('input',e=>{const q=e.target.value.toLowerCase();renderEstoque(todosProds.filter(p=>p.nome.toLowerCase().includes(q)||(p.sku||'').toLowerCase().includes(q)));});
+  if(b)b.addEventListener('input',aplicarFiltrosEstoque);
   subscribeEstoqueFornecedor();
   loadEstoque();
   loadCategorias();
@@ -667,16 +761,50 @@ async function addProduto(e){
     loadEstoque();notif('Produto cadastrado!','success');
   }catch(ex){setMsg('msg-prod','❌ '+ex.message,false);}
 }
-async function ajuste(id,tipo){
-  const qtd=prompt(tipo==='entrada'?'Quantidade a adicionar:':'Quantidade a retirar:');
-  if(!qtd||isNaN(qtd)||Number(qtd)<=0)return;
-  try{await api(`/api/produtos/${id}/${tipo}`,{method:'POST',body:JSON.stringify({quantidade:Number(qtd)})});notif(tipo==='entrada'?`+${qtd} unidades`:`-${qtd} unidades`,'success');loadEstoque();}
-  catch(ex){notif('Erro: '+ex.message,'error');}
+function abrirAjusteEstoque(id,tipo){
+  const produto=todosProds.find(p=>Number(p.id)===Number(id));
+  ajusteAtual={id,tipo,produto};
+  document.getElementById('ajuste-titulo').textContent=tipo==='entrada'?'Entrada de estoque':'Saída de estoque';
+  document.getElementById('ajuste-produto').textContent=produto?`${produto.nome} · saldo atual: ${produto.quantidade||0}`:'';
+  document.getElementById('ajuste-quantidade').value=1;
+  document.getElementById('ajuste-observacao').value=tipo==='entrada'?'Reposição de estoque':'Retirada manual';
+  document.getElementById('modal-ajuste-estoque').style.display='block';
+  setTimeout(()=>document.getElementById('ajuste-quantidade').focus(),50);
+}
+function fecharAjusteEstoque(){
+  document.getElementById('modal-ajuste-estoque').style.display='none';
+  ajusteAtual=null;
+}
+async function confirmarAjusteEstoque(){
+  if(!ajusteAtual)return;
+  const qtd=Number(document.getElementById('ajuste-quantidade').value);
+  const observacoes=document.getElementById('ajuste-observacao').value.trim();
+  if(!qtd||qtd<=0){notif('Informe uma quantidade válida','warn');return;}
+  try{
+    await api(`/api/produtos/${ajusteAtual.id}/${ajusteAtual.tipo}`,{method:'POST',body:JSON.stringify({quantidade:qtd,observacoes})});
+    notif(ajusteAtual.tipo==='entrada'?`+${qtd} unidades adicionadas`:`-${qtd} unidades retiradas`,'success');
+    fecharAjusteEstoque();
+    loadEstoque();
+    loadHistorico();
+  }catch(ex){notif('Erro: '+ex.message,'error');}
 }
 async function delProd(id,nome){
   if(!confirm(`Deletar "${nome}"?`))return;
   try{await api(`/api/produtos/${id}`,{method:'DELETE'});notif('Produto removido.','success');loadEstoque();}
   catch(ex){notif('Erro: '+ex.message,'error');}
+}
+function exportarEstoqueCSV(){
+  const linhas=[['Produto','SKU','Categoria','Custo','Venda','Quantidade','Minimo','Status','Valor estoque']];
+  todosProds.forEach(p=>{
+    linhas.push([p.nome||'',p.sku||'',p.categoria_nome||'',Number(p.custo||0),Number(p.preco||0),Number(p.quantidade||0),Number(p.minimo||0),statusProduto(p),Number(p.preco||0)*Number(p.quantidade||0)]);
+  });
+  const csv=linhas.map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='estoque-nexus.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 // ── CATEGORIAS ─────────────────────────────────────────────────
@@ -702,7 +830,7 @@ async function loadPedidos(){
   try{
     const [pedidos,prods,vends]=await Promise.all([api('/api/pedidos'),api('/api/produtos'),api('/api/vendedores')]);
     const selP=document.getElementById('sel-prod-pedido');
-    selP.innerHTML=prods.map(p=>`<option value="${p.id}" data-preco="${p.preco}" data-prep="${p.tempo_preparo||0}" data-prep-un="${p.tempo_preparo_unidade||'min'}" data-entr="${p.tempo_entrega||0}" data-entr-un="${p.tempo_entrega_unidade||'min'}">${p.nome} (${p.quantidade} un.) — ${fmt(p.preco)}</option>`).join('');
+    selP.innerHTML=prods.map(p=>`<option value="${p.id}" data-preco="${p.preco}" data-stock="${p.quantidade||0}" data-prep="${p.tempo_preparo||0}" data-prep-un="${p.tempo_preparo_unidade||'min'}" data-entr="${p.tempo_entrega||0}" data-entr-un="${p.tempo_entrega_unidade||'min'}" ${Number(p.quantidade||0)<=0?'disabled':''}>${p.nome} (${p.quantidade} un.) — ${fmt(p.preco)}</option>`).join('');
     const selV=document.getElementById('sel-vend-pedido');
     selV.innerHTML='<option value="">Sem vendedor</option>'+vends.map(v=>`<option value="${v.id}" data-com="${v.comissao||0}">${v.nome} (${v.comissao||0}% comissão)</option>`).join('');
     const tb=document.getElementById('tb-pedidos');
@@ -787,6 +915,8 @@ function addItemPedido(){
   const sel=document.getElementById('sel-prod-pedido');
   const opt=sel.options[sel.selectedIndex];if(!opt)return;
   const qtd=parseInt(document.getElementById('qtd-pedido').value)||1;
+  const stock=parseInt(opt.dataset.stock)||0;
+  if(qtd>stock){notif(`Estoque insuficiente. Disponível: ${stock} un.`,'warn');return;}
   const preco=parseFloat(opt.dataset.preco)||0;
   itensPedido.push({produto_id:sel.value,nome:opt.text.split('(')[0].trim(),quantidade:qtd,preco,subtotal:qtd*preco,tempo_preparo:parseInt(opt.dataset.prep)||0,prep_un:opt.dataset.prepUn||'min',tempo_entrega:parseInt(opt.dataset.entr)||0,entr_un:opt.dataset.entrUn||'min'});
   renderItens();

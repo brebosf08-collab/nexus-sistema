@@ -60,6 +60,7 @@
     tr:hover td{background:rgba(255,255,255,0.02);}
     .badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:8px;font-size:0.7rem;font-weight:700;text-transform:uppercase;}
     .badge-ok,.badge-confirmado,.badge-pago,.badge-entregue{background:var(--green-g);color:var(--green);}
+    .badge-zero{background:rgba(244,63,94,0.12);color:var(--red);}
     .badge-pendente{background:rgba(245,158,11,0.12);color:var(--amber);}
     .badge-cancelado{background:rgba(244,63,94,0.12);color:var(--red);}
     .badge-agendada{background:rgba(99,102,241,0.12);color:var(--indigo);}
@@ -68,6 +69,17 @@
     .forn-card:hover{border-color:var(--accent);transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,0.3);}
     .prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1.25rem;}
     .prod-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1.25rem;display:flex;flex-direction:column;}
+    .catalog-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:1rem;}
+    .catalog-summary .mini-stat{background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:14px;padding:1rem;}
+    .mini-stat .mini-label{font-size:0.68rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.35rem;}
+    .mini-stat .mini-value{font-family:'Space Grotesk',sans-serif;font-size:1.2rem;font-weight:800;}
+    .catalog-toolbar{display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;margin-bottom:1.25rem;}
+    .catalog-toolbar input,.catalog-toolbar select{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;color:#fff;padding:0.6rem 0.9rem;font-size:0.85rem;}
+    .catalog-toolbar input{min-width:220px;flex:1;}
+    .catalog-toolbar select option{background:#1a1a2e;color:#fff;}
+    .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:1000;padding:2rem;overflow:auto;}
+    .modal-panel{max-width:520px;margin:0 auto;background:#09090b;border:1px solid rgba(255,255,255,0.08);border-radius:24px;padding:2rem;position:relative;}
+    .modal-close{position:absolute;top:18px;right:18px;border:none;background:rgba(255,255,255,0.08);color:#fff;border-radius:999px;width:36px;height:36px;cursor:pointer;}
     .status-sel{background:#1e1e2e;border:1px solid var(--border);border-radius:8px;padding:5px 10px;color:#fff;font-size:0.8rem;font-weight:600;cursor:pointer;}
     .status-sel option{background:#1e1e2e;color:#fff;}
     .notif-bar{position:fixed;top:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:0.5rem;max-width:360px;}
@@ -156,6 +168,26 @@
         </div>
         <button class="btn btn-outline" onclick="voltarFornecedores()"><i class="fas fa-arrow-left"></i> Voltar</button>
       </div>
+      <div class="catalog-summary">
+        <div class="mini-stat"><div class="mini-label">Produtos</div><div class="mini-value" id="cat-total">0</div></div>
+        <div class="mini-stat"><div class="mini-label">Disponíveis</div><div class="mini-value" id="cat-disponiveis" style="color:var(--accent)">0</div></div>
+        <div class="mini-stat"><div class="mini-label">Menor preço</div><div class="mini-value" id="cat-menor">R$ 0</div></div>
+        <div class="mini-stat"><div class="mini-label">Maior preço</div><div class="mini-value" id="cat-maior">R$ 0</div></div>
+      </div>
+      <div class="catalog-toolbar">
+        <input id="busca-catalogo-produto" placeholder="Buscar produto, categoria ou descrição..." oninput="aplicarFiltrosCatalogo()">
+        <select id="filtro-catalogo-status" onchange="aplicarFiltrosCatalogo()">
+          <option value="todos">Todos os produtos</option>
+          <option value="disponivel">Disponíveis</option>
+          <option value="indisponivel">Indisponíveis</option>
+        </select>
+        <select id="ordem-catalogo-produto" onchange="aplicarFiltrosCatalogo()">
+          <option value="nome">Ordenar por nome</option>
+          <option value="menor_preco">Menor preço</option>
+          <option value="maior_preco">Maior preço</option>
+          <option value="maior_estoque">Maior estoque</option>
+        </select>
+      </div>
       <div id="grid-produtos" class="prod-grid"></div>
     </div>
   </div>
@@ -240,6 +272,27 @@
 
 <div class="notif-bar" id="notif-bar"></div>
 
+<div id="modal-compra" class="modal-backdrop">
+  <div class="modal-panel">
+    <button class="modal-close" onclick="fecharCompra()"><i class="fas fa-times"></i></button>
+    <h2 style="margin-bottom:0.35rem;">Fazer Pedido</h2>
+    <div id="compra-produto" style="color:var(--muted);font-size:0.9rem;margin-bottom:1.25rem;"></div>
+    <div style="display:grid;gap:1rem;">
+      <div class="field"><label>Quantidade</label><input id="compra-qtd" type="number" min="1" value="1" oninput="atualizarTotalCompra()"></div>
+      <div class="field"><label>Forma de pagamento</label><select id="compra-pagamento"><option value="PIX">PIX</option><option value="Cartão de Crédito">Cartão de Crédito</option><option value="Cartão de Débito">Cartão de Débito</option><option value="Boleto">Boleto</option><option value="Transferência">Transferência</option><option value="Dinheiro">Dinheiro</option></select></div>
+      <div class="field"><label>Entrega desejada</label><input id="compra-entrega" type="date"></div>
+      <div class="field"><label>Mensagem para o fornecedor</label><textarea id="compra-mensagem" placeholder="Ex: horário de recebimento, endereço, observações..."></textarea></div>
+      <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap">
+        <strong id="compra-total" style="color:var(--accent);font-size:1.25rem;">Total: R$ 0,00</strong>
+        <div style="display:flex;gap:1rem">
+          <button class="btn btn-outline" onclick="fecharCompra()">Cancelar</button>
+          <button class="btn btn-primary" onclick="confirmarCompra()"><i class="fas fa-cart-plus"></i> Confirmar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── NAVEGAÇÃO ──────────────────────────────────────────────────
 function navTo(sec){
@@ -273,6 +326,10 @@ function subscribeProdutoDisponibilidade(fornId){
     .on('postgres_changes', { event:'*', schema:'public', table:'produtos', filter:`empresa_id=eq.${fornId}` }, payload => {
       const prod = payload.new || payload.old;
       if(!prod) return;
+      if(payload.new){
+        produtosCatalogo = produtosCatalogo.map(p=>Number(p.id)===Number(prod.id)?{...p,...prod}:p);
+        aplicarFiltrosCatalogo();
+      }
       const card = document.querySelector(`[data-produto-id="${prod.id}"]`);
       if(card){
         const esg = prod.quantidade <= 0;
@@ -288,6 +345,7 @@ function subscribeProdutoDisponibilidade(fornId){
         }
         if(btn){
           btn.disabled = esg;
+          btn.dataset.stock = prod.quantidade || 0;
           btn.innerHTML = esg ? '<i class="fas fa-times"></i> Esgotado' : '<i class="fas fa-cart-plus"></i> Fazer Pedido';
         }
       }
@@ -296,6 +354,8 @@ function subscribeProdutoDisponibilidade(fornId){
 }
 function fmt(v){return 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2});}
 function fmtData(d){if(!d)return '-';return new Date(d).toLocaleDateString('pt-BR');}
+function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function nomeFornecedorPedido(p){return p.fornecedor_nome||p.empresa_nome||p.cliente_nome||'-';}
 
 // ── NOTIF ──────────────────────────────────────────────────────
 function notif(msg,tipo='success'){
@@ -326,7 +386,7 @@ async function loadDashboard(){
     // Últimos 5 pedidos
     const tb=document.getElementById('tb-ultimos-pedidos');
     const ults=pedidosArray.slice(0,5);
-    tb.innerHTML=ults.length?ults.map(p=>`<tr><td><b>#${p.id}</b></td><td>${p.empresa_nome||'-'}</td><td>${fmtData(p.data||p.criado_em)}</td><td style="color:var(--accent)">${fmt(p.total)}</td><td><span class="badge badge-${p.status||'pendente'}">${(p.status||'pendente').toUpperCase()}</span></td></tr>`).join(''):'<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:2rem">Nenhum pedido</td></tr>';
+    tb.innerHTML=ults.length?ults.map(p=>`<tr><td><b>#${p.id}</b></td><td>${escapeHtml(nomeFornecedorPedido(p))}</td><td>${fmtData(p.data||p.criado_em)}</td><td style="color:var(--accent)">${fmt(p.total)}</td><td><span class="badge badge-${p.status||'pendente'}">${(p.status||'pendente').toUpperCase()}</span></td></tr>`).join(''):'<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:2rem">Nenhum pedido</td></tr>';
   }catch(e){console.error('Erro no dashboard cliente:',e);}
   loadGrafico('mes');
 }
@@ -354,58 +414,104 @@ async function loadGrafico(periodo){
 }
 
 // ── CATÁLOGO ───────────────────────────────────────────────────
+let fornecedorAtual=null;
+let produtosCatalogo=[];
+let compraAtual=null;
+
 async function loadCatalogo(){
   try{
     const forns=await api('/api/catalogo/fornecedores');
     const grid=document.getElementById('grid-fornecedores');
     grid.innerHTML=forns.length?forns.map(f=>`
-      <div class="forn-card" onclick="verProdutos(${f.id},'${f.nome.replace(/'/g,"\\'")}')">
+      <div class="forn-card" onclick="verProdutos(${f.id},'${String(f.nome||'').replace(/'/g,"\\'")}')">
         <div style="width:48px;height:48px;border-radius:14px;background:var(--accent-g);display:flex;align-items:center;justify-content:center;margin-bottom:1rem">
           <i class="fas fa-store" style="color:var(--accent);font-size:1.2rem"></i>
         </div>
-        <div style="font-size:1rem;font-weight:700;margin-bottom:6px">${f.nome}</div>
-        <div style="font-size:0.8rem;color:var(--muted);margin-bottom:1rem"><i class="fas fa-location-dot"></i> ${f.endereco||'Acesso Remoto'}</div>
+        <div style="font-size:1rem;font-weight:700;margin-bottom:6px">${escapeHtml(f.nome)}</div>
+        <div style="font-size:0.8rem;color:var(--muted);margin-bottom:1rem"><i class="fas fa-location-dot"></i> ${escapeHtml(f.endereco||'Acesso Remoto')}</div>
         <button class="btn btn-primary btn-sm" style="width:100%"><i class="fas fa-arrow-right"></i> Ver Catálogo</button>
       </div>`).join(''):'<div style="color:var(--muted);padding:2rem;text-align:center;grid-column:1/-1">Nenhum fornecedor disponível</div>';
   }catch(e){console.error(e);}
 }
 
 async function verProdutos(id,nome){
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('sec-catalogo').classList.add('active');
+  document.querySelectorAll('.nav-item[data-sec="catalogo"]').forEach(n=>n.classList.add('active'));
+  fornecedorAtual={id,nome};
   document.getElementById('view-fornecedores').style.display='none';
   const vP=document.getElementById('view-produtos');vP.style.display='block';
   document.getElementById('nome-forn-sel').textContent=nome;
   const grid=document.getElementById('grid-produtos');
   grid.innerHTML='<div style="color:var(--muted);padding:1rem">Carregando...</div>';
   try{
-    const prods=await api(`/api/catalogo/fornecedores/${id}/produtos`);
-    grid.innerHTML=prods.length?prods.map(p=>{
-      const esg=p.quantidade<=0;
-      const img=p.imagem?`<img src="/static/uploads/${p.imagem}" style="width:100%;height:140px;object-fit:contain;border-radius:10px;margin-bottom:12px;background:#fff">`:`<div style="height:100px;border-radius:10px;background:rgba(255,255,255,0.02);display:flex;align-items:center;justify-content:center;margin-bottom:12px"><i class="fas fa-image" style="font-size:2rem;opacity:0.15"></i></div>`;
-      const tempos=[
-        p.tempo_preparo?`⏱ Preparo: ${p.tempo_preparo} ${p.tempo_preparo_unidade||'min'}`:'',
-        p.tempo_entrega?`🚚 Entrega: ${p.tempo_entrega} ${p.tempo_entrega_unidade||'min'}`:''
-      ].filter(Boolean).join(' · ');
-      return`<div class="prod-card" data-produto-id="${p.id}">
-        ${img}
-        <div style="font-weight:700;margin-bottom:4px">${p.nome}</div>
-        ${p.descricao?`<div style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;line-height:1.4">${p.descricao}</div>`:''}
-        ${tempos?`<div style="font-size:0.75rem;color:var(--amber);margin-bottom:8px">${tempos}</div>`:''}
-        <div style="font-size:1.25rem;font-weight:800;color:var(--accent);margin-top:auto;margin-bottom:6px">${fmt(p.preco)}</div>
-        <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;color:var(--muted);margin-bottom:10px">
-          <span class="badge ${esg ? 'badge-zero' : 'badge-ok'} produto-status">${esg ? 'Indisponível' : 'Disponível'}</span>
-          <span class="produto-qty">${esg ? '❌ Esgotado' : p.quantidade+' disponíveis'}</span>
-        </div>
-        <button class="btn btn-primary" style="width:100%" ${esg?'disabled':''} onclick="comprar(${id},'${p.id}','${p.nome.replace(/'/g,"\\'")}',${p.quantidade})">
-          ${esg?'<i class="fas fa-times"></i> Esgotado':'<i class="fas fa-cart-plus"></i> Fazer Pedido'}
-        </button>
-      </div>`;
-    }).join(''):'<div style="color:var(--muted);text-align:center;padding:2rem;grid-column:1/-1">Nenhum produto disponível</div>';
-    if(prods.length){
+    produtosCatalogo=await api(`/api/catalogo/fornecedores/${id}/produtos`);
+    document.getElementById('busca-catalogo-produto').value='';
+    document.getElementById('filtro-catalogo-status').value='todos';
+    document.getElementById('ordem-catalogo-produto').value='nome';
+    aplicarFiltrosCatalogo();
+    if(produtosCatalogo.length){
       subscribeProdutoDisponibilidade(id);
     } else {
       unsubscribeProdutoDisponibilidade();
     }
   }catch(e){grid.innerHTML='<div style="color:var(--red);padding:1rem">Erro ao carregar produtos</div>';} }
+
+function renderResumoCatalogo(lista){
+  const disponiveis=lista.filter(p=>Number(p.quantidade||0)>0);
+  const precos=lista.map(p=>Number(p.preco||0)).filter(v=>v>0);
+  document.getElementById('cat-total').textContent=lista.length;
+  document.getElementById('cat-disponiveis').textContent=disponiveis.length;
+  document.getElementById('cat-menor').textContent=precos.length?fmt(Math.min(...precos)):fmt(0);
+  document.getElementById('cat-maior').textContent=precos.length?fmt(Math.max(...precos)):fmt(0);
+}
+
+function aplicarFiltrosCatalogo(){
+  const termo=(document.getElementById('busca-catalogo-produto')?.value||'').toLowerCase().trim();
+  const status=document.getElementById('filtro-catalogo-status')?.value||'todos';
+  const ordem=document.getElementById('ordem-catalogo-produto')?.value||'nome';
+  let lista=[...produtosCatalogo].filter(p=>{
+    const disponivel=Number(p.quantidade||0)>0;
+    const texto=[p.nome,p.categoria_nome,p.descricao].join(' ').toLowerCase();
+    return (!termo||texto.includes(termo))&&(status==='todos'||(status==='disponivel'&&disponivel)||(status==='indisponivel'&&!disponivel));
+  });
+  lista.sort((a,b)=>{
+    if(ordem==='menor_preco')return Number(a.preco||0)-Number(b.preco||0);
+    if(ordem==='maior_preco')return Number(b.preco||0)-Number(a.preco||0);
+    if(ordem==='maior_estoque')return Number(b.quantidade||0)-Number(a.quantidade||0);
+    return String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR');
+  });
+  renderResumoCatalogo(lista);
+  renderProdutosCatalogo(lista);
+}
+
+function renderProdutosCatalogo(prods){
+  const grid=document.getElementById('grid-produtos');
+  grid.innerHTML=prods.length?prods.map(p=>{
+    const esg=Number(p.quantidade||0)<=0;
+    const img=p.imagem?`<img src="/static/uploads/${escapeHtml(p.imagem)}" style="width:100%;height:140px;object-fit:contain;border-radius:10px;margin-bottom:12px;background:#fff">`:`<div style="height:100px;border-radius:10px;background:rgba(255,255,255,0.02);display:flex;align-items:center;justify-content:center;margin-bottom:12px"><i class="fas fa-image" style="font-size:2rem;opacity:0.15"></i></div>`;
+    const tempos=[
+      p.tempo_preparo?`Preparo: ${escapeHtml(p.tempo_preparo)} ${escapeHtml(p.tempo_preparo_unidade||'min')}`:'',
+      p.tempo_entrega?`Entrega: ${escapeHtml(p.tempo_entrega)} ${escapeHtml(p.tempo_entrega_unidade||'min')}`:''
+    ].filter(Boolean).join(' · ');
+    return`<div class="prod-card" data-produto-id="${p.id}">
+      ${img}
+      <div style="font-weight:700;margin-bottom:4px">${escapeHtml(p.nome)}</div>
+      ${p.categoria_nome?`<div style="font-size:0.72rem;color:var(--accent);margin-bottom:6px">${escapeHtml(p.categoria_nome)}</div>`:''}
+      ${p.descricao?`<div style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;line-height:1.4">${escapeHtml(p.descricao)}</div>`:''}
+      ${tempos?`<div style="font-size:0.75rem;color:var(--amber);margin-bottom:8px">${tempos}</div>`:''}
+      <div style="font-size:1.25rem;font-weight:800;color:var(--accent);margin-top:auto;margin-bottom:6px">${fmt(p.preco)}</div>
+      <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;color:var(--muted);margin-bottom:10px">
+        <span class="badge ${esg ? 'badge-zero' : 'badge-ok'} produto-status">${esg ? 'Indisponível' : 'Disponível'}</span>
+        <span class="produto-qty">${esg ? 'Esgotado' : Number(p.quantidade||0)+' disponíveis'}</span>
+      </div>
+      <button class="btn btn-primary" style="width:100%" data-stock="${Number(p.quantidade||0)}" ${esg?'disabled':''} onclick="abrirCompra(${fornecedorAtual.id},${p.id})">
+        ${esg?'<i class="fas fa-times"></i> Esgotado':'<i class="fas fa-cart-plus"></i> Fazer Pedido'}
+      </button>
+    </div>`;
+  }).join(''):'<div style="color:var(--muted);text-align:center;padding:2rem;grid-column:1/-1">Nenhum produto encontrado</div>';
+}
 
 function voltarFornecedores(){
   document.getElementById('view-produtos').style.display='none';
@@ -425,13 +531,13 @@ async function loadFornecedoresCompartilhados(){
           </div>
           ${f.aceito?'<span class="badge badge-ok" style="font-size:0.65rem">✓ Aceito</span>':'<span class="badge badge-pendente" style="font-size:0.65rem">Pendente</span>'}
         </div>
-        <div style="font-size:1rem;font-weight:700;margin-bottom:6px">${f.nome}</div>
-        <div style="font-size:0.8rem;color:var(--muted);margin-bottom:1rem"><i class="fas fa-envelope"></i> ${f.email||'-'}</div>
+        <div style="font-size:1rem;font-weight:700;margin-bottom:6px">${escapeHtml(f.nome)}</div>
+        <div style="font-size:0.8rem;color:var(--muted);margin-bottom:1rem"><i class="fas fa-envelope"></i> ${escapeHtml(f.email||'-')}</div>
         <div style="font-size:0.75rem;color:var(--muted);margin-bottom:0.75rem">
-          Método: <b>${f.metodo==='convite'?'📨 Convite':'🔗 Link'}</b><br>
+          Método: <b>${f.metodo==='convite'?'Convite':'Link'}</b><br>
           Compartilhado: <b>${new Date(f.criado_em).toLocaleDateString('pt-BR')}</b>
         </div>
-        <button class="btn btn-primary btn-sm" style="width:100%" onclick="verProdutos(${f.id},'${f.nome.replace(/'/g,"\\'")}')"><i class="fas fa-arrow-right"></i> Ver Catálogo</button>
+        <button class="btn btn-primary btn-sm" style="width:100%" onclick="verProdutos(${f.id},'${String(f.nome||'').replace(/'/g,"\\'")}')"><i class="fas fa-arrow-right"></i> Ver Catálogo</button>
         ${!f.aceito?'<button class="btn btn-outline btn-sm" style="width:100%;margin-top:0.5rem" onclick="aceitarCompartilhamento(${f.compartilhamento_id})"><i class="fas fa-check"></i> Aceitar</button>':''}
       </div>`).join(''):'<div style="color:var(--muted);padding:2rem;text-align:center;grid-column:1/-1">Nenhum fornecedor compartilhou com você ainda</div>';
   }catch(e){console.error(e);}
@@ -445,15 +551,52 @@ async function aceitarCompartilhamento(id){
   }catch(ex){notif('Erro: '+ex.message,'error');}
 }
 
-async function comprar(fornId,prodId,nomeProd,maxQtd){
-  const qStr=prompt(`Quantidade de "${nomeProd}" (Máx: ${maxQtd}):`);
-  if(!qStr)return;
-  const qtd=parseInt(qStr);
-  if(isNaN(qtd)||qtd<=0||qtd>maxQtd){notif('Quantidade inválida','error');return;}
+function abrirCompra(fornId,prodId){
+  const produto=produtosCatalogo.find(p=>Number(p.id)===Number(prodId));
+  if(!produto)return;
+  compraAtual={fornId,produto};
+  document.getElementById('compra-produto').textContent=`${produto.nome} · disponível: ${produto.quantidade||0} · unitário: ${fmt(produto.preco)}`;
+  const qtd=document.getElementById('compra-qtd');
+  qtd.value=1;
+  qtd.max=produto.quantidade||1;
+  document.getElementById('compra-pagamento').value='PIX';
+  document.getElementById('compra-entrega').value='';
+  document.getElementById('compra-mensagem').value='';
+  atualizarTotalCompra();
+  document.getElementById('modal-compra').style.display='block';
+  setTimeout(()=>qtd.focus(),50);
+}
+
+function fecharCompra(){
+  document.getElementById('modal-compra').style.display='none';
+  compraAtual=null;
+}
+
+function atualizarTotalCompra(){
+  const qtd=Number(document.getElementById('compra-qtd').value||0);
+  const preco=Number(compraAtual?.produto?.preco||0);
+  document.getElementById('compra-total').textContent='Total: '+fmt(qtd*preco);
+}
+
+async function confirmarCompra(){
+  if(!compraAtual)return;
+  const qtd=parseInt(document.getElementById('compra-qtd').value)||0;
+  const maxQtd=Number(compraAtual.produto.quantidade||0);
+  if(qtd<=0||qtd>maxQtd){notif(`Quantidade inválida. Disponível: ${maxQtd} un.`,'error');return;}
   try{
-    await api('/api/cliente/comprar',{method:'POST',body:JSON.stringify({fornecedor_id:fornId,produto_id:prodId,quantidade:qtd})});
-    notif(`🎉 Pedido de ${qtd}x "${nomeProd}" realizado!`,'party');
-    verProdutos(fornId,document.getElementById('nome-forn-sel').textContent);
+    await api('/api/cliente/comprar',{method:'POST',body:JSON.stringify({
+      fornecedor_id:compraAtual.fornId,
+      produto_id:compraAtual.produto.id,
+      quantidade:qtd,
+      forma_pagamento:document.getElementById('compra-pagamento').value,
+      data_entrega:document.getElementById('compra-entrega').value||null,
+      mensagem_cliente:document.getElementById('compra-mensagem').value.trim()
+    })});
+    notif(`Pedido de ${qtd}x "${compraAtual.produto.nome}" realizado!`,'party');
+    const fornId=compraAtual.fornId;
+    const nome=fornecedorAtual?.nome||document.getElementById('nome-forn-sel').textContent;
+    fecharCompra();
+    verProdutos(fornId,nome);
     loadDashboard();
   }catch(ex){notif('Erro: '+ex.message,'error');}
 }
@@ -466,7 +609,7 @@ async function loadPedidos(){
     tb.innerHTML=pedidos.length?pedidos.map(p=>`
       <tr>
         <td><b>#${p.id}</b></td>
-        <td>${p.empresa_nome||p.cliente_nome||'-'}</td>
+        <td>${escapeHtml(nomeFornecedorPedido(p))}</td>
         <td>${fmtData(p.data||p.criado_em)}</td>
         <td style="color:var(--accent)">${fmt(p.total)}</td>
         <td><span class="badge badge-${p.status||'pendente'}">${(p.status||'pendente').toUpperCase()}</span></td>
@@ -528,7 +671,7 @@ async function loadHistorico(){
   try{
     const pedidos=await api('/api/pedidos');
     const tb=document.getElementById('tb-historico');
-    tb.innerHTML=pedidos.length?pedidos.map(p=>`<tr><td>Pedido #${p.id} realizado</td><td>${fmtData(p.data||p.criado_em)}</td><td style="color:var(--accent)">${fmt(p.total)}</td><td>${p.cliente_nome||''}</td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:2rem">Sem registros</td></tr>';
+    tb.innerHTML=pedidos.length?pedidos.map(p=>`<tr><td>Pedido #${p.id} realizado</td><td>${fmtData(p.data||p.criado_em)}</td><td style="color:var(--accent)">${fmt(p.total)}</td><td>${escapeHtml(nomeFornecedorPedido(p))}</td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:2rem">Sem registros</td></tr>';
   }catch(e){}
 }
 
