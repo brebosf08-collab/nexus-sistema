@@ -117,6 +117,7 @@
   <div class="nav-label">Principal</div>
   <button class="nav-item active" data-sec="dashboard" onclick="navTo('dashboard')"><i class="fas fa-chart-pie"></i> Dashboard</button>
   <div class="nav-label">Estoque</div>
+  <button class="nav-item" data-sec="produtos" onclick="navTo('produtos')"><i class="fas fa-square-plus"></i> Cadastrar Produto</button>
   <button class="nav-item" data-sec="estoque" onclick="navTo('estoque')"><i class="fas fa-box"></i> Inventário</button>
   <button class="nav-item" data-sec="categorias" onclick="navTo('categorias')"><i class="fas fa-tags"></i> Categorias</button>
   <div class="nav-label">Comercial</div>
@@ -172,6 +173,20 @@
       <div class="table-wrap"><table><thead><tr><th>Produto</th><th>Atual</th><th>Mínimo</th><th>Ação</th></tr></thead><tbody id="tb-alertas"></tbody></table></div>
     </div>
     <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:1rem;flex-wrap:wrap">
+        <h3 style="margin:0"><i class="fas fa-boxes-stacked" style="color:var(--accent)"></i> Estoque Agora</h3>
+        <button class="btn btn-sm btn-outline" onclick="navTo('estoque')"><i class="fas fa-arrow-right"></i> Ver Inventário</button>
+      </div>
+      <div class="table-wrap"><table><thead><tr><th>Produto</th><th>Qtd</th><th>Valor Venda</th><th>Status</th></tr></thead><tbody id="tb-dashboard-estoque"></tbody></table></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:1rem;flex-wrap:wrap">
+        <h3 style="margin:0"><i class="fas fa-bell" style="color:var(--amber)"></i> Notificações</h3>
+        <button class="btn btn-sm btn-outline" onclick="marcarTodosAvisosLidos()"><i class="fas fa-check-double"></i> Marcar lidas</button>
+      </div>
+      <div id="box-notificacoes" style="display:grid;gap:0.75rem"></div>
+    </div>
+    <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
         <h3 style="margin:0"><i class="fas fa-chart-line" style="color:var(--accent)"></i> Vendas por Período</h3>
         <div style="display:flex;gap:0.5rem">
@@ -184,9 +199,9 @@
     </div>
   </div>
 
-  <!-- ESTOQUE -->
-  <div id="sec-estoque" class="sec">
-    <div class="page-title"><i class="fas fa-boxes-stacked"></i> Inventário</div>
+  <!-- CADASTRAR PRODUTO -->
+  <div id="sec-produtos" class="sec">
+    <div class="page-title"><i class="fas fa-square-plus"></i> Cadastrar Produto</div>
     <div class="card">
       <h3>Cadastrar Produto</h3>
       <form onsubmit="addProduto(event)" enctype="multipart/form-data">
@@ -248,6 +263,11 @@
       </form>
       <div id="msg-prod" class="msg"></div>
     </div>
+  </div>
+
+  <!-- ESTOQUE -->
+  <div id="sec-estoque" class="sec">
+    <div class="page-title"><i class="fas fa-boxes-stacked"></i> Inventário</div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:1rem;flex-wrap:wrap">
         <h3 style="margin:0">Produtos Cadastrados</h3>
@@ -517,7 +537,7 @@ function navTo(sec) {
   const el = document.getElementById('sec-' + sec);
   if (el) el.classList.add('active');
   document.querySelectorAll(`.nav-item[data-sec="${sec}"]`).forEach(n => n.classList.add('active'));
-  const loaders = {estoque:loadEstoque,categorias:loadCategorias,pedidos:loadPedidos,vendedores:loadVendedores,reunioes:loadReunioes,contatos:loadContatos,historico:loadHistorico,metas:loadMetas,vitrine:loadVitrine};
+  const loaders = {produtos:loadCadastroProduto,estoque:loadEstoque,categorias:loadCategorias,pedidos:loadPedidos,vendedores:loadVendedores,reunioes:loadReunioes,contatos:loadContatos,historico:loadHistorico,metas:loadMetas,vitrine:loadVitrine};
   if (loaders[sec]) loaders[sec]();
 }
 
@@ -543,12 +563,14 @@ function subscribeEstoqueFornecedor(){
   supabaseStockChannel = supabaseClient.channel(`realtime-estoque-{{ empresa.id }}`)
     .on('postgres_changes', { event:'*', schema:'public', table:'produtos', filter:`empresa_id=eq.{{ empresa.id }}` }, payload => {
       loadEstoque();
+      loadDashboard();
     })
     .subscribe();
 }
 function fmt(v){return 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2});}
 function fmtData(d){if(!d)return '-';return new Date(d).toLocaleDateString('pt-BR');}
 function fmtTempo(val, unidade){if(!val||val==0)return '-';return val+' '+(unidade||'min');}
+function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
 // ── NOTIF ──────────────────────────────────────────────────────
 function notif(msg, tipo='success') {
@@ -605,7 +627,11 @@ async function loadDashboard(){
       const tb=document.getElementById('tb-alertas');
       tb.innerHTML=baixos.map(p=>`<tr><td><b>${p.nome}</b></td><td><span class="badge ${p.quantidade==0?'badge-zero':'badge-low'}">${p.quantidade}</span></td><td>${p.minimo}</td><td><button class="btn btn-sm btn-success" onclick="navTo('estoque')"><i class="fas fa-plus"></i> Repor</button></td></tr>`).join('');
       baixos.forEach(p=>{if(p.quantidade==0)notif(`🔴 Produto ZERADO: ${p.nome}`,'error');else notif(`⚠️ Estoque baixo: ${p.nome} (${p.quantidade} un.)`,'warn');});
+    }else{
+      document.getElementById('card-alertas').style.display='none';
     }
+
+    renderDashboardEstoque(prodArray);
 
     // Meta destaque
     const metas=getMetas();
@@ -620,8 +646,56 @@ async function loadDashboard(){
         <div style="text-align:right;font-size:0.8rem;color:var(--muted)">${pct}% concluído</div>`;
     }
   }catch(e){console.error('Erro no dashboard:',e);}
+  loadAvisos();
   loadGrafico('semana');
   verificarReunioes();
+}
+
+function renderDashboardEstoque(prods){
+  const tb=document.getElementById('tb-dashboard-estoque');
+  if(!tb)return;
+  const ordenados=[...prods].sort((a,b)=>{
+    const sa=statusProduto(a),sb=statusProduto(b);
+    const peso={zerado:0,baixo:1,ok:2};
+    return (peso[sa]-peso[sb]) || Number(a.quantidade||0)-Number(b.quantidade||0);
+  }).slice(0,8);
+  tb.innerHTML=ordenados.length?ordenados.map(p=>{
+    const st=statusProduto(p);
+    const cls=st==='zerado'?'badge-zero':st==='baixo'?'badge-low':'badge-ok';
+    const txt=st==='zerado'?'Zerado':st==='baixo'?'Baixo':'OK';
+    const valor=Number(p.preco||0)*Number(p.quantidade||0);
+    return `<tr><td><b>${escapeHtml(p.nome)}</b></td><td>${Number(p.quantidade||0)}</td><td style="color:var(--green)">${fmt(valor)}</td><td><span class="badge ${cls}">${txt}</span></td></tr>`;
+  }).join(''):'<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:1.5rem">Nenhum produto cadastrado</td></tr>';
+}
+
+async function loadAvisos(){
+  const box=document.getElementById('box-notificacoes');
+  if(!box)return;
+  try{
+    const avisos=await api('/api/avisos?nao_lidos=1');
+    box.innerHTML=avisos.length?avisos.slice(0,6).map(a=>`
+      <div style="border:1px solid var(--border);border-radius:14px;padding:1rem;background:rgba(255,255,255,0.02);display:flex;justify-content:space-between;gap:1rem;align-items:flex-start">
+        <div>
+          <div style="font-weight:800">${escapeHtml(a.titulo)}</div>
+          <div style="color:var(--muted);font-size:0.82rem;margin-top:0.35rem">${escapeHtml(a.mensagem||'')}</div>
+        </div>
+        <button class="btn btn-sm btn-outline" onclick="marcarAvisoLido(${a.id})"><i class="fas fa-check"></i></button>
+      </div>`).join(''):'<div style="color:var(--muted);padding:1rem;border:1px solid var(--border);border-radius:14px">Nenhuma notificação nova.</div>';
+  }catch(e){
+    box.innerHTML='<div style="color:var(--muted);padding:1rem;border:1px solid var(--border);border-radius:14px">Notificações indisponíveis no momento.</div>';
+  }
+}
+
+async function marcarAvisoLido(id){
+  try{await api(`/api/avisos/${id}/lido`,{method:'PUT'});loadAvisos();}catch(e){}
+}
+
+async function marcarTodosAvisosLidos(){
+  try{
+    const avisos=await api('/api/avisos?nao_lidos=1');
+    await Promise.all(avisos.map(a=>api(`/api/avisos/${a.id}/lido`,{method:'PUT'})));
+    loadAvisos();
+  }catch(e){notif('Não foi possível marcar as notificações','warn');}
 }
 
 async function loadGrafico(periodo){
@@ -668,6 +742,9 @@ async function verificarReunioes(){
 // ── ESTOQUE ────────────────────────────────────────────────────
 let todosProds=[];
 let ajusteAtual=null;
+async function loadCadastroProduto(){
+  await loadCategoriasSelect();
+}
 async function loadEstoque(){
   try{todosProds=await api('/api/produtos');aplicarFiltrosEstoque();await loadCategoriasSelect();}catch(e){console.error(e);}
 }
@@ -676,9 +753,6 @@ function statusProduto(p){
   if(q===0)return 'zerado';
   if(q<=m)return 'baixo';
   return 'ok';
-}
-function escapeHtml(v){
-  return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function margemProduto(p){
   const preco=Number(p.preco||0),custo=Number(p.custo||0);
@@ -751,14 +825,20 @@ async function addProduto(e){
   e.preventDefault();
   const fd=new FormData(e.target);
   const newCat=document.getElementById('new-cat-prod').value.trim();
-  if(newCat){try{const r=await api('/api/categorias',{method:'POST',body:JSON.stringify({nome:newCat})});fd.set('categoria_id',r.id);}catch(ex){}}
+  if(newCat){
+    fd.set('categoria_nome',newCat);
+    fd.delete('categoria_id');
+  }
   try{
     const res=await fetch('/api/produtos',{method:'POST',body:fd});
     const j=await res.json();
     if(!res.ok)throw new Error(j.mensagem||'Erro');
     setMsg('msg-prod','✅ Produto cadastrado!',true);
     e.target.reset();document.getElementById('new-cat-prod').value='';
-    loadEstoque();notif('Produto cadastrado!','success');
+    await loadCategoriasSelect();
+    await loadEstoque();
+    loadDashboard();
+    notif('Produto cadastrado!','success');
   }catch(ex){setMsg('msg-prod','❌ '+ex.message,false);}
 }
 function abrirAjusteEstoque(id,tipo){
@@ -1144,6 +1224,7 @@ loadDashboard();
 verificarMetas();
 // Checar reuniões a cada 10 minutos
 setInterval(verificarReunioes,600000);
+setInterval(loadAvisos,60000);
 </script>
 </body>
 </html>

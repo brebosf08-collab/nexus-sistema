@@ -350,6 +350,9 @@ def api_produtos():
 @app.route('/api/produtos', methods=['POST'])
 @login_required
 def api_criar_produto():
+    if session.get('empresa_tipo') != 'fornecedor':
+        return jsonify({'sucesso': False, 'mensagem': 'Apenas fornecedores podem cadastrar produtos'}), 403
+
     # Aceita tanto form-data (com imagem) quanto JSON
     if request.content_type and 'multipart' in request.content_type:
         data = request.form
@@ -394,6 +397,8 @@ def api_criar_produto():
         cat_res = criar_categoria(empresa_id, nova_cat)
         if cat_res.get('sucesso'):
             cat_id = cat_res.get('id')
+        else:
+            return jsonify(cat_res), 400
 
     r = criar_produto(
         empresa_id,
@@ -606,6 +611,17 @@ def api_criar_reuniao():
                       data.get('participantes', ''))
     if not r.get('sucesso'):
         return jsonify(r), 400
+    try:
+        criar_aviso(
+            get_empresa_id(),
+            'reuniao',
+            'Reunião agendada',
+            f"{titulo} em {data.get('data_hora', '')}",
+            'normal',
+            data.get('data_hora')
+        )
+    except Exception:
+        pass
     return jsonify(r), 201
 
 
@@ -741,6 +757,16 @@ def api_cliente_comprar():
         )
         
         if r.get('sucesso'):
+            try:
+                criar_aviso(
+                    forn_id,
+                    'pedido',
+                    'Novo pedido recebido',
+                    f"{cliente_empresa} comprou {qtd}x {prod['nome']} no valor de R$ {total:.2f}.",
+                    'alta'
+                )
+            except Exception:
+                pass
             return jsonify({'sucesso': True, 'mensagem': 'Pedido realizado com sucesso!'})
         else:
             return jsonify(r), 400

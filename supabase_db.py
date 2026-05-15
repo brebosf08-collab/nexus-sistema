@@ -9,9 +9,9 @@ except ImportError:
 # Configure essas variáveis no seu ambiente ou .env
 # Se não houver no ambiente, usa os valores padrão (fallback)
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://gtctfqphvsczeenpysco.supabase.co")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY") or os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY")
 if not SUPABASE_KEY:
-    raise RuntimeError("SUPABASE_KEY must be defined as an environment variable")
+    raise RuntimeError("SUPABASE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY must be defined as an environment variable")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -341,7 +341,20 @@ def criar_pedido(empresa_id, cliente_nome, data, itens, vendedor_id=None, observ
             "comissao_valor": float(comissao_valor or 0),
             "cliente_id": cliente_id
         }
-        res = supabase.table('pedidos').insert(p_data).execute()
+        try:
+            res = supabase.table('pedidos').insert(p_data).execute()
+        except Exception:
+            # Compatibilidade com bancos mais antigos que ainda não têm todos
+            # os campos extras de pedido criados no Supabase.
+            legacy_data = dict(p_data)
+            for campo in ('mensagem_cliente', 'comissao_valor'):
+                legacy_data.pop(campo, None)
+            try:
+                res = supabase.table('pedidos').insert(legacy_data).execute()
+            except Exception:
+                for campo in ('data_entrega', 'forma_pagamento'):
+                    legacy_data.pop(campo, None)
+                res = supabase.table('pedidos').insert(legacy_data).execute()
         pedido_id = res.data[0]['id']
         
         for item in itens:
