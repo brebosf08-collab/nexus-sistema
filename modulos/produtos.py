@@ -43,8 +43,11 @@ def criar_produto_completo(empresa_id, dados_produto):
             if sku_check.data:
                 return {'sucesso': False, 'erro': 'SKU já existe para este fornecedor'}
         
-        # Preparar dados
-        produto = {
+        margem_lucro = round(((float(dados_produto.get('preco', 0)) - float(dados_produto.get('custo', 0))) / float(dados_produto.get('preco', 1)) * 100), 2) if dados_produto.get('preco', 0) > 0 else 0
+        imagem = dados_produto.get('imagem_url', '') or dados_produto.get('imagem', '')
+
+        # Dados garantidos no schema principal atual do projeto.
+        produto_base = {
             'empresa_id': empresa_id,
             'nome': dados_produto['nome'].strip(),
             'sku': dados_produto.get('sku', '').strip() or None,
@@ -54,14 +57,24 @@ def criar_produto_completo(empresa_id, dados_produto):
             'quantidade': int(dados_produto.get('quantidade', 0)),
             'minimo': int(dados_produto.get('minimo', 0)),
             'descricao': dados_produto.get('descricao', '').strip(),
+            'imagem': imagem,
+            'ativo': True
+        }
+
+        # Campos novos: são usados quando a tabela já recebeu a migração.
+        produto_completo = {
+            **produto_base,
             'imagem_url': dados_produto.get('imagem_url', ''),
             'codigo_barras': dados_produto.get('codigo_barras', '').strip() or None,
-            'ativo': True,
-            'margem_lucro': round(((float(dados_produto.get('preco', 0)) - float(dados_produto.get('custo', 0))) / float(dados_produto.get('preco', 1)) * 100), 2) if dados_produto.get('preco', 0) > 0 else 0
+            'margem_lucro': margem_lucro
         }
         
-        # Criar produto
-        res = supabase.table('produtos').insert(produto).execute()
+        # Criar produto. Se o Supabase ainda não tiver as colunas novas,
+        # salva com o schema base para o produto aparecer no inventário.
+        try:
+            res = supabase.table('produtos').insert(produto_completo).execute()
+        except Exception:
+            res = supabase.table('produtos').insert(produto_base).execute()
         
         if not res.data:
             return {'sucesso': False, 'erro': 'Erro ao criar produto'}

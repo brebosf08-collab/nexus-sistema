@@ -5,7 +5,7 @@ Suporta Excel, PDF e CSV
 
 import os
 from datetime import datetime
-from io import BytesIO
+from io import BytesIO, StringIO
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -48,7 +48,7 @@ def exportar_produtos_excel(empresa_id, filtro_categoria=None):
                 'Preço': f"R$ {p.get('preco', 0):.2f}",
                 'Estoque': p.get('quantidade', 0),
                 'Mínimo': p.get('minimo', 0),
-                'Margem %': f"{p.get('margem_lucro', 0):.1f}%",
+                'Margem %': f"{calcular_margem(p.get('custo', 0), p.get('preco', 0), p.get('margem_lucro')):.1f}%",
                 'Descrição': p.get('descricao', '')[:50]  # Truncar
             }
             for p in produtos
@@ -116,11 +116,11 @@ def exportar_pedidos_excel(empresa_id, data_inicio=None, data_fim=None):
         query = supabase.table('pedidos').select('*').eq('empresa_id', empresa_id)
         
         if data_inicio:
-            query = query.gte('data_criacao', f"{data_inicio}T00:00:00")
+            query = query.gte('criado_em', f"{data_inicio}T00:00:00")
         if data_fim:
-            query = query.lte('data_criacao', f"{data_fim}T23:59:59")
+            query = query.lte('criado_em', f"{data_fim}T23:59:59")
         
-        res = query.order('data_criacao', desc=True).execute()
+        res = query.order('criado_em', desc=True).execute()
         pedidos = res.data or []
         
         if not pedidos:
@@ -130,10 +130,10 @@ def exportar_pedidos_excel(empresa_id, data_inicio=None, data_fim=None):
         df = pd.DataFrame([
             {
                 'Pedido #': p.get('id', ''),
-                'Data': datetime.fromisoformat(p.get('data_criacao', '')).strftime('%d/%m/%Y'),
+                'Data': formatar_data_exportacao(p.get('criado_em') or p.get('data_criacao') or p.get('data')),
                 'Cliente': p.get('cliente_nome', ''),
                 'Status': p.get('status', 'Pendente'),
-                'Total': f"R$ {p.get('valor_total', 0):.2f}",
+                'Total': f"R$ {float(p.get('total') or p.get('valor_total') or 0):.2f}",
                 'Itens': p.get('quantidade_itens', 0),
                 'Email': p.get('cliente_email', ''),
                 'Telefone': p.get('cliente_telefone', '')
@@ -313,8 +313,9 @@ def exportar_produtos_csv(empresa_id):
         produtos = res.data or []
         
         df = pd.DataFrame(produtos)
-        output = BytesIO()
-        df.to_csv(output, index=False, encoding='utf-8')
+        csv_text = StringIO()
+        df.to_csv(csv_text, index=False)
+        output = BytesIO(csv_text.getvalue().encode('utf-8-sig'))
         output.seek(0)
         
         nome_arquivo = f"produtos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
@@ -460,3 +461,24 @@ def registrar_exportacao(empresa_id, tipo, nome_arquivo, formato, quantidade_reg
     
     except Exception as e:
         print(f"Erro ao registrar exportação: {e}")
+
+
+def calcular_margem(custo, preco, margem_salva=None):
+    if margem_salva is not None:
+        return float(margem_salva or 0)
+
+    custo = float(custo or 0)
+    preco = float(preco or 0)
+    if preco <= 0:
+        return 0
+    return ((preco - custo) / preco) * 100
+
+
+def formatar_data_exportacao(valor):
+    if not valor:
+        return ''
+
+    try:
+        return datetime.fromisoformat(str(valor).replace('Z', '+00:00')).strftime('%d/%m/%Y')
+    except Exception:
+        return str(valor)

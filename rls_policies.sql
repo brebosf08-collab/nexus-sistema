@@ -107,6 +107,19 @@ CREATE TABLE IF NOT EXISTS itens_pedido (
     subtotal NUMERIC(12,2) NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS carrinho (
+    id SERIAL PRIMARY KEY,
+    cliente_id INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    fornecedor_id INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    produto_id INTEGER NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
+    quantidade INTEGER NOT NULL DEFAULT 1,
+    preco_unitario NUMERIC(12,2) NOT NULL,
+    nome_produto VARCHAR(255),
+    data_criacao TIMESTAMP DEFAULT NOW(),
+    data_atualizacao TIMESTAMP DEFAULT NOW(),
+    criado_em TIMESTAMP DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS reunioes (
     id SERIAL PRIMARY KEY,
     empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE,
@@ -174,6 +187,9 @@ CREATE INDEX IF NOT EXISTS idx_pedidos_empresa     ON pedidos(empresa_id);
 CREATE INDEX IF NOT EXISTS idx_pedidos_cliente     ON pedidos(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_pedidos_status      ON pedidos(status);
 CREATE INDEX IF NOT EXISTS idx_itens_pedido        ON itens_pedido(pedido_id);
+CREATE INDEX IF NOT EXISTS idx_carrinho_cliente    ON carrinho(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_carrinho_fornecedor ON carrinho(fornecedor_id);
+CREATE INDEX IF NOT EXISTS idx_carrinho_produto    ON carrinho(produto_id);
 CREATE INDEX IF NOT EXISTS idx_categorias_empresa  ON categorias(empresa_id);
 CREATE INDEX IF NOT EXISTS idx_vendedores_empresa  ON vendedores(empresa_id);
 CREATE INDEX IF NOT EXISTS idx_reunioes_empresa    ON reunioes(empresa_id);
@@ -260,6 +276,17 @@ DROP POLICY IF EXISTS "rls_itens_pedido_select" ON itens_pedido;
 DROP POLICY IF EXISTS "rls_itens_pedido_insert" ON itens_pedido;
 CREATE POLICY "rls_itens_pedido_select" ON itens_pedido FOR SELECT USING (true);
 CREATE POLICY "rls_itens_pedido_insert" ON itens_pedido FOR INSERT WITH CHECK (true);
+
+-- carrinho
+ALTER TABLE carrinho ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "rls_carrinho_select" ON carrinho;
+DROP POLICY IF EXISTS "rls_carrinho_insert" ON carrinho;
+DROP POLICY IF EXISTS "rls_carrinho_update" ON carrinho;
+DROP POLICY IF EXISTS "rls_carrinho_delete" ON carrinho;
+CREATE POLICY "rls_carrinho_select" ON carrinho FOR SELECT USING (true);
+CREATE POLICY "rls_carrinho_insert" ON carrinho FOR INSERT WITH CHECK (true);
+CREATE POLICY "rls_carrinho_update" ON carrinho FOR UPDATE USING (true);
+CREATE POLICY "rls_carrinho_delete" ON carrinho FOR DELETE USING (true);
 
 -- reunioes
 ALTER TABLE reunioes ENABLE ROW LEVEL SECURITY;

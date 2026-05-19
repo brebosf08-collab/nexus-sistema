@@ -3,7 +3,7 @@ Módulo de Notificações
 Suporta Email, SMS e Notificações In-App
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from supabase_db import supabase
 import os
 import requests
@@ -81,12 +81,17 @@ def contar_notificacoes_nao_lidas(empresa_id):
         return 0
 
 
-def marcar_notificacao_lida(notificacao_id):
+def marcar_notificacao_lida(notificacao_id, empresa_id=None):
     """Marca notificação como lida"""
     try:
-        res = supabase.table('notificacoes').update(
+        query = supabase.table('notificacoes').update(
             {'lida': True, 'data_leitura': datetime.now().isoformat()}
-        ).eq('id', notificacao_id).execute()
+        ).eq('id', notificacao_id)
+
+        if empresa_id is not None:
+            query = query.eq('empresa_id', empresa_id)
+
+        res = query.execute()
         
         return {'sucesso': bool(res.data)}
     
@@ -94,10 +99,15 @@ def marcar_notificacao_lida(notificacao_id):
         return {'sucesso': False, 'erro': str(e)}
 
 
-def deletar_notificacao(notificacao_id):
+def deletar_notificacao(notificacao_id, empresa_id=None):
     """Deleta uma notificação"""
     try:
-        res = supabase.table('notificacoes').delete().eq('id', notificacao_id).execute()
+        query = supabase.table('notificacoes').delete().eq('id', notificacao_id)
+
+        if empresa_id is not None:
+            query = query.eq('empresa_id', empresa_id)
+
+        res = query.execute()
         return {'sucesso': True}
     except Exception as e:
         return {'sucesso': False, 'erro': str(e)}
