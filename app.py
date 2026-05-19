@@ -35,6 +35,11 @@ try:
         exportar_relatorio_inventario_excel, exportar_produtos_csv,
         exportar_relatorio_pdf_simples, registrar_exportacao
     )
+    from modulos.carrinho import (
+        adicionar_ao_carrinho, obter_carrinho, remover_do_carrinho,
+        atualizar_quantidade_carrinho, limpar_carrinho, converter_carrinho_em_pedido,
+        obter_resumo_carrinho
+    )
     MODULOS_CARREGADOS = True
 except ImportError as e:
     print(f"Aviso: Alguns módulos não puderam ser carregados: {e}")
@@ -384,7 +389,7 @@ def api_criar_produto():
 
     # Aceita tanto form-data (com imagem) quanto JSON
     if request.content_type and 'multipart' in request.content_type:
-        data = request.form
+        data = request.form.to_dict()
     else:
         data = request.get_json(force=True, silent=True) or {}
 
@@ -397,7 +402,7 @@ def api_criar_produto():
         return jsonify({'sucesso': False, 'mensagem': 'Sessão inválida. Faça login novamente.'}), 401
 
     # Upload de imagem
-    imagem_filename = None
+    imagem_url = None
     if 'imagem' in request.files:
         img_file = request.files['imagem']
         if img_file and img_file.filename != '':
@@ -405,7 +410,7 @@ def api_criar_produto():
             if ext in ('jpg', 'jpeg', 'png', 'gif', 'webp'):
                 filename = secure_filename(f"{uuid.uuid4().hex}.{ext}")
                 img_file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                imagem_filename = filename
+                imagem_url = filename
 
     def to_float(val):
         try: return float(str(val or 0).replace(',', '.'))
@@ -429,18 +434,28 @@ def api_criar_produto():
         else:
             return jsonify(cat_res), 400
 
-    r = criar_produto(
-        empresa_id,
-        nome,
-        data.get('sku', ''),
-        cat_id,
-        to_float(data.get('custo', 0)),
-        to_float(data.get('preco', 0)),
-        to_int(data.get('quantidade', 0)),
-        to_int(data.get('minimo', 0)),
-        data.get('descricao', ''),
-        imagem_filename
-    )
+    # Usar módulo completo com inventário se disponível
+    if MODULOS_CARREGADOS:
+        dados_produto = {
+            'nome': nome,
+            'sku': data.get('sku', ''),
+            'categoria_id': cat_id,
+            'custo': to_float(data.get('custo', 0)),
+            'preco': to_float(data.get('preco', 0)),
+            'quantidade': to_int(data.get('quantidade', 0)),
+            'minimo': to_int(data.get('minimo', 0)),
+            'descricao': data.get('descricao', ''),
+            'imagem_url': imagem_url,
+            'codigo_barras': data.get('codigo_barras', ''),
+        }
+        r = criar_produto_completo(empresa_id, dados_produto)
+    else:
+        r = criar_produto(
+            empresa_id, nome, data.get('sku', ''), cat_id,
+            to_float(data.get('custo', 0)), to_float(data.get('preco', 0)),
+            to_int(data.get('quantidade', 0)), to_int(data.get('minimo', 0)),
+            data.get('descricao', ''), imagem_url
+        )
 
     if not r.get('sucesso'):
         return jsonify(r), 400
@@ -495,6 +510,147 @@ def api_saida_estoque(pid):
     if not r.get('sucesso'):
         return jsonify(r), 400
     return jsonify(r)
+
+
+# ═══════════════════════════════════════════════════════════════
+# PRODUTOS V2 - COM INVENTÁRIO COMPLETO (NOVO)
+# ═══════════════════════════════════════════════════════════════
+
+@app.route('/api/v2/produtos', methods=['POST'])
+@login_required
+def api_criar_produto_v2():
+    """Cria produto com validações e integração com inventário completa"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'sucesso': False, 'mensagem': 'Módulo de produtos não disponível'}), 503
+    
+    if session.get('empresa_tipo') != 'fornecedor':
+        return jsonify({'sucesso': False, 'mensagem': 'Apenas fornecedores podem cadastrar produtos'}), 403
+    
+    # Aceita tanto form-data (com imagem) quanto JSON
+    if request.content_type and 'multipart' in request.content_type:
+        data = request.form.to_dict()
+    else:
+        data = request.get_json(force=True, silent=True) or {}
+    
+    empresa_id = get_empresa_id()
+    
+    # Upload de imagem
+    imagem_url = None
+    if 'imagem' in request.files:
+        img_file = request.files['imagem']
+        if img_file and img_file.filename != '':
+            ext = img_file.filename.rsplit('.', 1)[-1].lower()
+            if ext in ('jpg', 'jpeg', 'png', 'gif', 'webp'):
+                filename = secure_filename(f"{uuid.uuid4().hex}.{ext}")
+                img_file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                imagem_url = f"/static/uploads/{filename}"
+    
+    def to_float(val):
+        try: return float(str(val or 0).replace(',', '.'))
+        except: return 0.0
+    
+    def to_int(val):
+        try: return int(val or 0)
+        except: return 0
+    
+    # Preparar dados do produto
+    dados_produto = {
+        'nome': data.get('nome', ''),
+        'sku': data.get('sku', ''),
+        'categoria_id': to_int(data.get('categoria_id')) or None,
+        'custo': to_float(data.get('custo')),
+        'preco': to_float(data.get('preco')),
+        'quantidade': to_int(data.get('quantidade')),
+        'minimo': to_int(data.get('minimo')),
+        'descricao': data.get('descricao', ''),
+        'imagem_url': imagem_url or data.get('imagem_url', ''),
+        'codigo_barras': data.get('codigo_barras', '')
+    }
+    
+    resultado = criar_produto_completo(empresa_id, dados_produto)
+    
+    if resultado.get('sucesso'):
+        try:
+            criar_notif_nova(
+                empresa_id,
+                '✓ Produto Cadastrado',
+                f"Novo produto '{dados_produto.get('nome')}' foi cadastrado com sucesso",
+                tipo='sucesso'
+            )
+        except:
+            pass
+        
+        return jsonify(resultado), 201
+    
+    return jsonify(resultado), 400
+
+
+@app.route('/api/v2/estoque/<int:pid>', methods=['PUT'])
+@login_required
+def api_atualizar_estoque_v2(pid):
+    """Atualiza estoque com histórico automático"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'sucesso': False, 'mensagem': 'Módulo não disponível'}), 503
+    
+    data = request.get_json(force=True, silent=True) or {}
+    
+    try:
+        quantidade = int(data.get('quantidade'))
+    except:
+        return jsonify({'sucesso': False, 'erro': 'Quantidade inválida'}), 400
+    
+    motivo = data.get('motivo', 'Ajuste manual')
+    resultado = atualizar_estoque(pid, quantidade, motivo)
+    
+    if resultado.get('sucesso'):
+        try:
+            criar_notif_nova(
+                get_empresa_id(),
+                '📦 Estoque Atualizado',
+                f"Estoque atualizado: {motivo}",
+                tipo='info'
+            )
+        except:
+            pass
+    
+    return jsonify(resultado), 200 if resultado.get('sucesso') else 400
+
+
+@app.route('/api/v2/movimentos/<int:pid>', methods=['GET'])
+@login_required
+def api_obter_movimentos_v2(pid):
+    """Retorna histórico de movimentos de estoque"""
+    if not MODULOS_CARREGADOS:
+        return jsonify([]), 200
+    
+    limite = request.args.get('limite', 50, type=int)
+    movimentos = obter_movimentos_produto(pid, limite)
+    
+    return jsonify(movimentos), 200
+
+
+@app.route('/api/v2/inventario/estadisticas', methods=['GET'])
+@login_required
+def api_estadisticas_inventario_v2():
+    """Retorna estatísticas de inventário da empresa"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'erro': 'Módulo não disponível'}), 503
+    
+    stats = obter_estatisticas_inventario(get_empresa_id())
+    return jsonify(stats), 200
+
+
+@app.route('/api/v2/alertas-estoque', methods=['GET'])
+@login_required
+def api_obter_alertas_estoque_v2():
+    """Retorna alertas de estoque baixo"""
+    if not MODULOS_CARREGADOS:
+        return jsonify([]), 200
+    
+    filtro_status = request.args.get('status', 'aberto')
+    alertas = obter_alertas_estoque(get_empresa_id(), filtro_status)
+    
+    return jsonify(alertas), 200
 
 
 # ═══════════════════════════════════════════
@@ -602,6 +758,159 @@ def api_status_pedido(pid):
     if not status:
         return jsonify({'sucesso': False, 'mensagem': 'Status é obrigatório'}), 400
     return jsonify(atualizar_status_pedido(get_empresa_id(), pid, status))
+
+
+# ═══════════════════════════════════════════
+# CARRINHO DE COMPRAS API
+# ═══════════════════════════════════════════
+
+@app.route('/api/carrinho', methods=['GET'])
+@login_required
+def api_obter_carrinho():
+    """Retorna o carrinho do cliente logado"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'itens': [], 'total_itens': 0, 'total_geral': 0}), 200
+    
+    fornecedor_id = request.args.get('fornecedor_id', type=int)
+    carrinho = obter_carrinho(get_empresa_id(), fornecedor_id)
+    
+    return jsonify(carrinho), 200
+
+
+@app.route('/api/carrinho/resumo', methods=['GET'])
+@login_required
+def api_resumo_carrinho():
+    """Retorna resumo rápido do carrinho"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'total_itens': 0, 'total_geral': 0, 'quantidade_produtos': 0}), 200
+    
+    resumo = obter_resumo_carrinho(get_empresa_id())
+    
+    return jsonify(resumo), 200
+
+
+@app.route('/api/carrinho/adicionar', methods=['POST'])
+@login_required
+def api_adicionar_carrinho():
+    """Adiciona produto ao carrinho"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'sucesso': False, 'erro': 'Módulo não disponível'}), 503
+    
+    if session.get('empresa_tipo') != 'cliente':
+        return jsonify({'sucesso': False, 'erro': 'Apenas clientes podem usar carrinho'}), 403
+    
+    data = request.get_json(force=True, silent=True) or {}
+    
+    try:
+        produto_id = int(data.get('produto_id'))
+        fornecedor_id = int(data.get('fornecedor_id'))
+        quantidade = int(data.get('quantidade', 1))
+    except:
+        return jsonify({'sucesso': False, 'erro': 'Dados inválidos'}), 400
+    
+    resultado = adicionar_ao_carrinho(get_empresa_id(), produto_id, quantidade, fornecedor_id)
+    
+    status = 200 if resultado.get('sucesso') else 400
+    return jsonify(resultado), status
+
+
+@app.route('/api/carrinho/<int:item_id>', methods=['DELETE'])
+@login_required
+def api_remover_carrinho(item_id):
+    """Remove item do carrinho"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'sucesso': False}), 503
+    
+    if session.get('empresa_tipo') != 'cliente':
+        return jsonify({'sucesso': False}), 403
+    
+    resultado = remover_do_carrinho(item_id)
+    
+    status = 200 if resultado.get('sucesso') else 400
+    return jsonify(resultado), status
+
+
+@app.route('/api/carrinho/<int:item_id>', methods=['PUT'])
+@login_required
+def api_atualizar_carrinho(item_id):
+    """Atualiza quantidade de item no carrinho"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'sucesso': False}), 503
+    
+    if session.get('empresa_tipo') != 'cliente':
+        return jsonify({'sucesso': False}), 403
+    
+    data = request.get_json(force=True, silent=True) or {}
+    
+    try:
+        nova_quantidade = int(data.get('quantidade', 0))
+    except:
+        return jsonify({'sucesso': False, 'erro': 'Quantidade inválida'}), 400
+    
+    resultado = atualizar_quantidade_carrinho(item_id, nova_quantidade)
+    
+    status = 200 if resultado.get('sucesso') else 400
+    return jsonify(resultado), status
+
+
+@app.route('/api/carrinho/limpar', methods=['DELETE'])
+@login_required
+def api_limpar_carrinho():
+    """Remove todos os items do carrinho"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'sucesso': False}), 503
+    
+    if session.get('empresa_tipo') != 'cliente':
+        return jsonify({'sucesso': False}), 403
+    
+    fornecedor_id = request.args.get('fornecedor_id', type=int)
+    resultado = limpar_carrinho(get_empresa_id(), fornecedor_id)
+    
+    return jsonify(resultado), 200 if resultado.get('sucesso') else 400
+
+
+@app.route('/api/carrinho/checkout', methods=['POST'])
+@login_required
+def api_checkout():
+    """Converte carrinho em pedido"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'sucesso': False, 'erro': 'Módulo não disponível'}), 503
+    
+    if session.get('empresa_tipo') != 'cliente':
+        return jsonify({'sucesso': False, 'erro': 'Apenas clientes'}), 403
+    
+    data = request.get_json(force=True, silent=True) or {}
+    
+    fornecedor_id = data.get('fornecedor_id')
+    if not fornecedor_id:
+        return jsonify({'sucesso': False, 'erro': 'Fornecedor é obrigatório'}), 400
+    
+    # Preparar dados do pedido
+    dados_pedido = {
+        'cliente_nome': session.get('empresa_nome', 'Cliente'),
+        'cliente_email': data.get('email', ''),
+        'telefone': data.get('telefone', ''),
+        'endereco': data.get('endereco', ''),
+        'forma_pagamento': data.get('forma_pagamento', 'pendente'),
+        'mensagem': data.get('mensagem', ''),
+        'data_entrega': data.get('data_entrega')
+    }
+    
+    resultado = converter_carrinho_em_pedido(get_empresa_id(), fornecedor_id, dados_pedido)
+    
+    if resultado.get('sucesso'):
+        try:
+            criar_notif_nova(
+                fornecedor_id,
+                '🛒 Novo Pedido Recebido',
+                f"Novo pedido #{resultado.get('pedido_id')} - Total: R$ {resultado.get('total'):.2f}",
+                tipo='sucesso'
+            )
+        except:
+            pass
+    
+    status = 201 if resultado.get('sucesso') else 400
+    return jsonify(resultado), status
 
 
 # ═══════════════════════════════════════════
@@ -990,103 +1299,6 @@ def api_relatorio_cliente():
 
 
 
-# ═══════════════════════════════════════════════════════════════
-# ENDPOINTS PARA PRODUTOS COM INVENTÁRIO (NOVO)
-# ═══════════════════════════════════════════════════════════════
-
-@app.route('/api/v2/produtos', methods=['POST'])
-@login_required
-def api_criar_produto_v2():
-    """Cria produto com validações e integração com inventário"""
-    if not MODULOS_CARREGADOS:
-        return jsonify({'sucesso': False, 'mensagem': 'Módulo de produtos não disponível'}), 503
-    
-    data = request.get_json(force=True, silent=True) or {}
-    
-    resultado = criar_produto_completo(get_empresa_id(), data)
-    
-    if resultado.get('sucesso'):
-        # Criar notificação
-        try:
-            criar_notif_nova(
-                get_empresa_id(),
-                '✓ Produto Criado',
-                f"Novo produto '{data.get('nome')}' foi cadastrado com sucesso",
-                tipo='sucesso'
-            )
-        except:
-            pass
-        
-        return jsonify(resultado), 201
-    return jsonify(resultado), 400
-
-
-@app.route('/api/v2/estoque/<int:pid>', methods=['PUT'])
-@login_required
-def api_atualizar_estoque_v2(pid):
-    """Atualiza estoque de um produto"""
-    if not MODULOS_CARREGADOS:
-        return jsonify({'sucesso': False, 'mensagem': 'Módulo de estoque não disponível'}), 503
-    
-    data = request.get_json(force=True, silent=True) or {}
-    quantidade = data.get('quantidade')
-    motivo = data.get('motivo', 'Ajuste manual')
-    
-    if quantidade is None:
-        return jsonify({'sucesso': False, 'erro': 'Quantidade é obrigatória'}), 400
-    
-    resultado = atualizar_estoque(pid, int(quantidade), motivo)
-    
-    if resultado.get('sucesso'):
-        try:
-            criar_notif_nova(
-                get_empresa_id(),
-                '📦 Estoque Atualizado',
-                f"Estoque atualizado: {motivo}",
-                tipo='info'
-            )
-        except:
-            pass
-    
-    return jsonify(resultado), 200 if resultado.get('sucesso') else 400
-
-
-@app.route('/api/v2/movimentos/<int:pid>', methods=['GET'])
-@login_required
-def api_obter_movimentos_v2(pid):
-    """Retorna histórico de movimentos de estoque"""
-    if not MODULOS_CARREGADOS:
-        return jsonify([]), 200
-    
-    limite = request.args.get('limite', 50, type=int)
-    movimentos = obter_movimentos_produto(pid, limite)
-    
-    return jsonify(movimentos), 200
-
-
-@app.route('/api/v2/inventario/estadisticas', methods=['GET'])
-@login_required
-def api_estadisticas_inventario_v2():
-    """Retorna estatísticas de inventário da empresa"""
-    if not MODULOS_CARREGADOS:
-        return jsonify({'erro': 'Módulo não disponível'}), 503
-    
-    stats = obter_estatisticas_inventario(get_empresa_id())
-    return jsonify(stats), 200
-
-
-@app.route('/api/v2/alertas-estoque', methods=['GET'])
-@login_required
-def api_obter_alertas_estoque_v2():
-    """Retorna alertas de estoque baixo"""
-    if not MODULOS_CARREGADOS:
-        return jsonify([]), 200
-    
-    filtro_status = request.args.get('status', 'aberto')
-    alertas = obter_alertas_estoque(get_empresa_id(), filtro_status)
-    
-    return jsonify(alertas), 200
-
 
 # ═══════════════════════════════════════════════════════════════
 # ENDPOINTS PARA AGENDAMENTOS (NOVO)
@@ -1227,84 +1439,7 @@ def api_agendamentos_atrasados():
     return jsonify(agendamentos), 200
 
 
-# ═══════════════════════════════════════════════════════════════
-# ENDPOINTS PARA NOTIFICAÇÕES (NOVO)
-# ═══════════════════════════════════════════════════════════════
-
-@app.route('/api/notificacoes', methods=['GET'])
-@login_required
-def api_obter_notificacoes_v2():
-    """Retorna notificações da empresa"""
-    if not MODULOS_CARREGADOS:
-        return jsonify([]), 200
-    
-    nao_lidas = request.args.get('nao_lidas') == '1'
-    limite = request.args.get('limite', 50, type=int)
-    
-    notificacoes = obter_notif_nova(get_empresa_id(), nao_lidas, limite)
-    
-    return jsonify(notificacoes), 200
-
-
-@app.route('/api/notificacoes/nao-lidas', methods=['GET'])
-@login_required
-def api_contar_notificacoes_nao_lidas_v2():
-    """Conta notificações não lidas"""
-    if not MODULOS_CARREGADOS:
-        return jsonify({'total': 0}), 200
-    
-    total = contar_notif_nao_lidas(get_empresa_id())
-    
-    return jsonify({'total': total}), 200
-
-
-@app.route('/api/notificacoes/<int:notif_id>/lida', methods=['PUT'])
-@login_required
-def api_marcar_notificacao_lida_v2(notif_id):
-    """Marca notificação como lida"""
-    if not MODULOS_CARREGADOS:
-        return jsonify({'sucesso': False}), 503
-    
-    resultado = marcar_notif_lida(notif_id)
-    
-    return jsonify(resultado), 200 if resultado.get('sucesso') else 400
-
-
-@app.route('/api/notificacoes/<int:notif_id>', methods=['DELETE'])
-@login_required
-def api_deletar_notificacao_v2(notif_id):
-    """Deleta uma notificação"""
-    if not MODULOS_CARREGADOS:
-        return jsonify({'sucesso': False}), 503
-    
-    resultado = deletar_notificacao(notif_id)
-    
-    return jsonify(resultado), 200 if resultado.get('sucesso') else 400
-
-
-@app.route('/api/notificacoes/preferencias', methods=['GET'])
-@login_required
-def api_obter_preferencias_notificacao():
-    """Obtém preferências de notificação"""
-    if not MODULOS_CARREGADOS:
-        return jsonify({}), 200
-    
-    prefs = obter_preferencias_notificacao(get_empresa_id())
-    
-    return jsonify(prefs), 200
-
-
-@app.route('/api/notificacoes/preferencias', methods=['PUT'])
-@login_required
-def api_salvar_preferencias_notificacao():
-    """Salva preferências de notificação"""
-    if not MODULOS_CARREGADOS:
-        return jsonify({'sucesso': False}), 503
-    
-    data = request.get_json(force=True, silent=True) or {}
-    resultado = salvar_preferencias_notificacao(get_empresa_id(), data)
-    
-    return jsonify(resultado), 200 if resultado.get('sucesso') else 400
+# (notificações já definidas acima — rotas duplicadas removidas)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1349,6 +1484,7 @@ def api_exportar_produtos():
         download_name=resultado['nome_arquivo'],
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' if formato == 'xlsx' else 'text/csv'
     )
+
 
 
 # ═══════════════════════════════════════════
