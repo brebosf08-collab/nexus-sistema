@@ -1317,23 +1317,45 @@ def api_exportar_produtos():
     """Exporta produtos para Excel"""
     if not MODULOS_CARREGADOS:
         return jsonify({'erro': 'Módulo não disponível'}), 503
-    # ═══════════════════════════════════════════════════════════════
-# ENDPOINTS PARA DASHBOARD
-# ═══════════════════════════════════════════════════════════════
 
-@app.route('/api/dashboard', methods=['GET'])
-@login_required
-def api_dashboard():
-    """Retorna dados consolidados do dashboard"""
-    if not MODULOS_CARREGADOS:
-        return jsonify({'erro': 'Módulo não disponível'}), 503
-    
-    dados_dashboard = {
-        'inventario': obter_estatisticas_inventario(get_empresa_id()),
-        'alertas_estoque': obter_alertas_estoque(get_empresa_id()),
-        'agendamentos_proximos': obter_proximos_agendamentos(get_empresa_id(), 7),
-        'agendamentos_atrasados': obter_agendamentos_atrasados(get_empresa_id()),
-        'notificacoes_nao_lidas': contar_notif_nao_lidas(get_empresa_id()),
-    }
-    
-    return jsonify(dados_dashboard), 200
+    formato = request.args.get('formato', 'xlsx')
+
+    if formato == 'xlsx':
+        resultado = exportar_produtos_excel(get_empresa_id())
+    elif formato == 'csv':
+        resultado = exportar_produtos_csv(get_empresa_id())
+    elif formato == 'pdf':
+        resultado = exportar_relatorio_pdf_simples(get_empresa_id(), 'inventario')
+    else:
+        return jsonify({'erro': 'Formato não suportado'}), 400
+
+    if not resultado.get('sucesso'):
+        return jsonify({'erro': resultado.get('erro', 'Erro na exportação')}), 400
+
+    try:
+        registrar_exportacao(
+            get_empresa_id(),
+            'produtos',
+            resultado.get('nome_arquivo'),
+            formato,
+            resultado.get('total_registros', 0)
+        )
+    except:
+        pass
+
+    return send_file(
+        resultado['arquivo'],
+        as_attachment=True,
+        download_name=resultado['nome_arquivo'],
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' if formato == 'xlsx' else 'text/csv'
+    )
+
+
+# ═══════════════════════════════════════════
+# START
+# ═══════════════════════════════════════════
+
+init_db()
+
+if __name__ == '__main__':
+    app.run(debug=True, port=8080)
