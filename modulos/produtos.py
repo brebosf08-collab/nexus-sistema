@@ -57,13 +57,13 @@ def criar_produto_completo(empresa_id, dados_produto):
             'quantidade': int(dados_produto.get('quantidade', 0)),
             'minimo': int(dados_produto.get('minimo', 0)),
             'descricao': dados_produto.get('descricao', '').strip(),
-            'imagem': imagem,
-            'ativo': True
+            'imagem': imagem
         }
 
         # Campos novos: são usados quando a tabela já recebeu a migração.
         produto_completo = {
             **produto_base,
+            'ativo': True,
             'imagem_url': dados_produto.get('imagem_url', ''),
             'codigo_barras': dados_produto.get('codigo_barras', '').strip() or None,
             'margem_lucro': margem_lucro
@@ -230,7 +230,7 @@ def obter_estatisticas_inventario(empresa_id):
         # Total de produtos
         produtos = supabase.table('produtos').select('id, quantidade, custo, preco').eq(
             'empresa_id', empresa_id
-        ).eq('ativo', True).execute()
+        ).execute()
         
         if not produtos.data:
             return {

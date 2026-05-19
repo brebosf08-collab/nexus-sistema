@@ -54,6 +54,8 @@ CREATE TABLE IF NOT EXISTS produtos (
     criado_em TIMESTAMP DEFAULT NOW()
 );
 
+ALTER TABLE produtos ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE;
+
 -- Tabela de histórico de movimentações de estoque
 -- (chamada 'historico' no sistema, NÃO 'estoque_movimentos')
 CREATE TABLE IF NOT EXISTS historico (

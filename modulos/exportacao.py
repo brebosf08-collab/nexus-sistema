@@ -27,7 +27,7 @@ def exportar_produtos_excel(empresa_id, filtro_categoria=None):
         # Buscar produtos
         query = supabase.table('produtos').select('*').eq(
             'empresa_id', empresa_id
-        ).eq('ativo', True)
+        )
         
         if filtro_categoria:
             query = query.eq('categoria_id', filtro_categoria)
@@ -193,7 +193,7 @@ def exportar_relatorio_inventario_excel(empresa_id):
         # Buscar dados
         res = supabase.table('produtos').select('*').eq(
             'empresa_id', empresa_id
-        ).eq('ativo', True).execute()
+        ).execute()
         
         produtos = res.data or []
         
@@ -308,7 +308,7 @@ def exportar_produtos_csv(empresa_id):
     try:
         res = supabase.table('produtos').select('*').eq(
             'empresa_id', empresa_id
-        ).eq('ativo', True).execute()
+        ).execute()
         
         produtos = res.data or []
         
@@ -353,7 +353,7 @@ def exportar_relatorio_pdf_simples(empresa_id, tipo='inventario'):
         if tipo == 'inventario':
             res = supabase.table('produtos').select('*').eq(
                 'empresa_id', empresa_id
-            ).eq('ativo', True).execute()
+            ).execute()
             
             produtos = res.data or []
             
