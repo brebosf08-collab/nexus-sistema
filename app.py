@@ -2,7 +2,7 @@ import os
 import uuid
 import datetime
 from functools import wraps
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, abort
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, abort, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 try:
@@ -10,6 +10,35 @@ try:
     load_dotenv()
 except ImportError:
     print("Aviso: Módulo 'python-dotenv' não encontrado. Usando variáveis de ambiente do sistema.")
+
+# Importar novos módulos de funcionalidades
+try:
+    from modulos.produtos import (
+        criar_produto_completo, atualizar_estoque, obter_movimentos_produto,
+        criar_alerta_estoque_baixo, obter_alertas_estoque, obter_estatisticas_inventario
+    )
+    from modulos.agendamento import (
+        criar_agendamento, obter_agendamentos, atualizar_agendamento,
+        cancelar_agendamento, concluir_agendamento, deletar_agendamento,
+        obter_proximos_agendamentos, obter_agendamentos_atrasados
+    )
+    from modulos.notificacoes import (
+        criar_notificacao as criar_notif_nova,
+        obter_notificacoes as obter_notif_nova,
+        contar_notificacoes_nao_lidas as contar_notif_nao_lidas,
+        marcar_notificacao_lida as marcar_notif_lida,
+        enviar_email_notificacao, template_email_notificacao_estoque,
+        obter_preferencias_notificacao, salvar_preferencias_notificacao
+    )
+    from modulos.exportacao import (
+        exportar_produtos_excel, exportar_pedidos_excel,
+        exportar_relatorio_inventario_excel, exportar_produtos_csv,
+        exportar_relatorio_pdf_simples, registrar_exportacao
+    )
+    MODULOS_CARREGADOS = True
+except ImportError as e:
+    print(f"Aviso: Alguns módulos não puderam ser carregados: {e}")
+    MODULOS_CARREGADOS = False
 
 # Importação centralizada do banco
 from supabase_db import (
@@ -959,19 +988,454 @@ def api_relatorio_cliente():
     return jsonify(obter_relatorio_cliente(get_empresa_id()))
 
 
-# ═══════════════════════════════════════════
-# LISTAGENS GERAIS
-# ═══════════════════════════════════════════
-
-@app.route('/api/fornecedores', methods=['GET'])
-def api_listar_fornecedores():
-    return jsonify(listar_fornecedores())
 
 
-@app.route('/api/clientes', methods=['GET'])
+# ═══════════════════════════════════════════════════════════════
+# ENDPOINTS PARA PRODUTOS COM INVENTÁRIO (NOVO)
+# ═══════════════════════════════════════════════════════════════
+
+@app.route('/api/v2/produtos', methods=['POST'])
 @login_required
-def api_listar_clientes():
-    return jsonify(listar_clientes())
+def api_criar_produto_v2():
+    """Cria produto com validações e integração com inventário"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'sucesso': False, 'mensagem': 'Módulo de produtos não disponível'}), 503
+    
+    data = request.get_json(force=True, silent=True) or {}
+    
+    resultado = criar_produto_completo(get_empresa_id(), data)
+    
+    if resultado.get('sucesso'):
+        # Criar notificação
+        try:
+            criar_notif_nova(
+                get_empresa_id(),
+                '✓ Produto Criado',
+                f"Novo produto '{data.get('nome')}' foi cadastrado com sucesso",
+                tipo='sucesso'
+            )
+        except:
+            pass
+        
+        return jsonify(resultado), 201
+    return jsonify(resultado), 400
+
+
+@app.route('/api/v2/estoque/<int:pid>', methods=['PUT'])
+@login_required
+def api_atualizar_estoque_v2(pid):
+    """Atualiza estoque de um produto"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'sucesso': False, 'mensagem': 'Módulo de estoque não disponível'}), 503
+    
+    data = request.get_json(force=True, silent=True) or {}
+    quantidade = data.get('quantidade')
+    motivo = data.get('motivo', 'Ajuste manual')
+    
+    if quantidade is None:
+        return jsonify({'sucesso': False, 'erro': 'Quantidade é obrigatória'}), 400
+    
+    resultado = atualizar_estoque(pid, int(quantidade), motivo)
+    
+    if resultado.get('sucesso'):
+        try:
+            criar_notif_nova(
+                get_empresa_id(),
+                '📦 Estoque Atualizado',
+                f"Estoque atualizado: {motivo}",
+                tipo='info'
+            )
+        except:
+            pass
+    
+    return jsonify(resultado), 200 if resultado.get('sucesso') else 400
+
+
+@app.route('/api/v2/movimentos/<int:pid>', methods=['GET'])
+@login_required
+def api_obter_movimentos_v2(pid):
+    """Retorna histórico de movimentos de estoque"""
+    if not MODULOS_CARREGADOS:
+        return jsonify([]), 200
+    
+    limite = request.args.get('limite', 50, type=int)
+    movimentos = obter_movimentos_produto(pid, limite)
+    
+    return jsonify(movimentos), 200
+
+
+@app.route('/api/v2/inventario/estadisticas', methods=['GET'])
+@login_required
+def api_estadisticas_inventario_v2():
+    """Retorna estatísticas de inventário da empresa"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'erro': 'Módulo não disponível'}), 503
+    
+    stats = obter_estatisticas_inventario(get_empresa_id())
+    return jsonify(stats), 200
+
+
+@app.route('/api/v2/alertas-estoque', methods=['GET'])
+@login_required
+def api_obter_alertas_estoque_v2():
+    """Retorna alertas de estoque baixo"""
+    if not MODULOS_CARREGADOS:
+        return jsonify([]), 200
+    
+    filtro_status = request.args.get('status', 'aberto')
+    alertas = obter_alertas_estoque(get_empresa_id(), filtro_status)
+    
+    return jsonify(alertas), 200
+
+
+# ═══════════════════════════════════════════════════════════════
+# ENDPOINTS PARA AGENDAMENTOS (NOVO)
+# ═══════════════════════════════════════════════════════════════
+
+@app.route('/api/agendamentos', methods=['POST'])
+@login_required
+def api_criar_agendamento():
+    """Cria um novo agendamento"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'sucesso': False, 'mensagem': 'Módulo não disponível'}), 503
+    
+    data = request.get_json(force=True, silent=True) or {}
+    resultado = criar_agendamento(get_empresa_id(), data)
+    
+    if resultado.get('sucesso'):
+        try:
+            criar_notif_nova(
+                get_empresa_id(),
+                '📅 Agendamento Criado',
+                f"Agendamento: {data.get('titulo')} em {data.get('data')}",
+                tipo='info'
+            )
+        except:
+            pass
+        
+        return jsonify(resultado), 201
+    return jsonify(resultado), 400
+
+
+@app.route('/api/agendamentos', methods=['GET'])
+@login_required
+def api_listar_agendamentos():
+    """Lista agendamentos da empresa"""
+    if not MODULOS_CARREGADOS:
+        return jsonify([]), 200
+    
+    filtro_data = request.args.get('data')  # hoje, semana, mes, atrasado
+    filtro_status = request.args.get('status')
+    
+    agendamentos = obter_agendamentos(
+        get_empresa_id(),
+        filtro_data=filtro_data,
+        filtro_status=filtro_status
+    )
+    
+    return jsonify(agendamentos), 200
+
+
+@app.route('/api/agendamentos/<int:agenda_id>', methods=['PUT'])
+@login_required
+def api_atualizar_agendamento(agenda_id):
+    """Atualiza um agendamento"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'sucesso': False}), 503
+    
+    data = request.get_json(force=True, silent=True) or {}
+    resultado = atualizar_agendamento(agenda_id, data)
+    
+    return jsonify(resultado), 200 if resultado.get('sucesso') else 400
+
+
+@app.route('/api/agendamentos/<int:agenda_id>/concluir', methods=['PUT'])
+@login_required
+def api_concluir_agendamento(agenda_id):
+    """Marca agendamento como concluído"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'sucesso': False}), 503
+    
+    data = request.get_json(force=True, silent=True) or {}
+    observacoes = data.get('observacoes', '')
+    
+    resultado = concluir_agendamento(agenda_id, observacoes)
+    
+    if resultado.get('sucesso'):
+        try:
+            criar_notif_nova(
+                get_empresa_id(),
+                '✓ Agendamento Concluído',
+                f"Agendamento #{agenda_id} foi concluído",
+                tipo='sucesso'
+            )
+        except:
+            pass
+    
+    return jsonify(resultado), 200 if resultado.get('sucesso') else 400
+
+
+@app.route('/api/agendamentos/<int:agenda_id>/cancelar', methods=['PUT'])
+@login_required
+def api_cancelar_agendamento(agenda_id):
+    """Cancela um agendamento"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'sucesso': False}), 503
+    
+    data = request.get_json(force=True, silent=True) or {}
+    motivo = data.get('motivo', '')
+    
+    resultado = cancelar_agendamento(agenda_id, motivo)
+    
+    return jsonify(resultado), 200 if resultado.get('sucesso') else 400
+
+
+@app.route('/api/agendamentos/<int:agenda_id>', methods=['DELETE'])
+@login_required
+def api_deletar_agendamento(agenda_id):
+    """Deleta um agendamento"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'sucesso': False}), 503
+    
+    resultado = deletar_agendamento(agenda_id)
+    
+    return jsonify(resultado), 200 if resultado.get('sucesso') else 400
+
+
+@app.route('/api/agendamentos/proximos', methods=['GET'])
+@login_required
+def api_proximos_agendamentos():
+    """Retorna próximos agendamentos"""
+    if not MODULOS_CARREGADOS:
+        return jsonify([]), 200
+    
+    dias = request.args.get('dias', 7, type=int)
+    agendamentos = obter_proximos_agendamentos(get_empresa_id(), dias)
+    
+    return jsonify(agendamentos), 200
+
+
+@app.route('/api/agendamentos/atrasados', methods=['GET'])
+@login_required
+def api_agendamentos_atrasados():
+    """Retorna agendamentos atrasados"""
+    if not MODULOS_CARREGADOS:
+        return jsonify([]), 200
+    
+    agendamentos = obter_agendamentos_atrasados(get_empresa_id())
+    
+    return jsonify(agendamentos), 200
+
+
+# ═══════════════════════════════════════════════════════════════
+# ENDPOINTS PARA NOTIFICAÇÕES (NOVO)
+# ═══════════════════════════════════════════════════════════════
+
+@app.route('/api/notificacoes', methods=['GET'])
+@login_required
+def api_obter_notificacoes_v2():
+    """Retorna notificações da empresa"""
+    if not MODULOS_CARREGADOS:
+        return jsonify([]), 200
+    
+    nao_lidas = request.args.get('nao_lidas') == '1'
+    limite = request.args.get('limite', 50, type=int)
+    
+    notificacoes = obter_notif_nova(get_empresa_id(), nao_lidas, limite)
+    
+    return jsonify(notificacoes), 200
+
+
+@app.route('/api/notificacoes/nao-lidas', methods=['GET'])
+@login_required
+def api_contar_notificacoes_nao_lidas_v2():
+    """Conta notificações não lidas"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'total': 0}), 200
+    
+    total = contar_notif_nao_lidas(get_empresa_id())
+    
+    return jsonify({'total': total}), 200
+
+
+@app.route('/api/notificacoes/<int:notif_id>/lida', methods=['PUT'])
+@login_required
+def api_marcar_notificacao_lida_v2(notif_id):
+    """Marca notificação como lida"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'sucesso': False}), 503
+    
+    resultado = marcar_notif_lida(notif_id)
+    
+    return jsonify(resultado), 200 if resultado.get('sucesso') else 400
+
+
+@app.route('/api/notificacoes/<int:notif_id>', methods=['DELETE'])
+@login_required
+def api_deletar_notificacao_v2(notif_id):
+    """Deleta uma notificação"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'sucesso': False}), 503
+    
+    resultado = deletar_notificacao(notif_id)
+    
+    return jsonify(resultado), 200 if resultado.get('sucesso') else 400
+
+
+@app.route('/api/notificacoes/preferencias', methods=['GET'])
+@login_required
+def api_obter_preferencias_notificacao():
+    """Obtém preferências de notificação"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({}), 200
+    
+    prefs = obter_preferencias_notificacao(get_empresa_id())
+    
+    return jsonify(prefs), 200
+
+
+@app.route('/api/notificacoes/preferencias', methods=['PUT'])
+@login_required
+def api_salvar_preferencias_notificacao():
+    """Salva preferências de notificação"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'sucesso': False}), 503
+    
+    data = request.get_json(force=True, silent=True) or {}
+    resultado = salvar_preferencias_notificacao(get_empresa_id(), data)
+    
+    return jsonify(resultado), 200 if resultado.get('sucesso') else 400
+
+
+# ═══════════════════════════════════════════════════════════════
+# ENDPOINTS PARA EXPORTAÇÃO DE RELATÓRIOS (NOVO)
+# ═══════════════════════════════════════════════════════════════
+
+@app.route('/api/exportar/produtos', methods=['GET'])
+@login_required
+def api_exportar_produtos():
+    """Exporta produtos para Excel"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'erro': 'Módulo não disponível'}), 503
+    
+    formato = request.args.get('formato', 'xlsx')  # xlsx, csv, pdf
+    
+    if formato == 'xlsx':
+        resultado = exportar_produtos_excel(get_empresa_id())
+    elif formato == 'csv':
+        resultado = exportar_produtos_csv(get_empresa_id())
+    elif formato == 'pdf':
+        resultado = exportar_relatorio_pdf_simples(get_empresa_id(), 'inventario')
+    else:
+        return jsonify({'erro': 'Formato não suportado'}), 400
+    
+    if not resultado.get('sucesso'):
+        return jsonify({'erro': resultado.get('erro', 'Erro na exportação')}), 400
+    
+    try:
+        registrar_exportacao(
+            get_empresa_id(),
+            'produtos',
+            resultado.get('nome_arquivo'),
+            formato,
+            resultado.get('total_registros', 0)
+        )
+    except:
+        pass
+    
+    return send_file(
+        resultado['arquivo'],
+        as_attachment=True,
+        download_name=resultado['nome_arquivo'],
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' if formato == 'xlsx' else 'text/csv'
+    )
+
+
+@app.route('/api/exportar/pedidos', methods=['GET'])
+@login_required
+def api_exportar_pedidos():
+    """Exporta pedidos para Excel"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'erro': 'Módulo não disponível'}), 503
+    
+    data_inicio = request.args.get('data_inicio')
+    data_fim = request.args.get('data_fim')
+    
+    resultado = exportar_pedidos_excel(get_empresa_id(), data_inicio, data_fim)
+    
+    if not resultado.get('sucesso'):
+        return jsonify({'erro': resultado.get('erro', 'Erro na exportação')}), 400
+    
+    try:
+        registrar_exportacao(
+            get_empresa_id(),
+            'pedidos',
+            resultado.get('nome_arquivo'),
+            'xlsx',
+            resultado.get('total_registros', 0)
+        )
+    except:
+        pass
+    
+    return send_file(
+        resultado['arquivo'],
+        as_attachment=True,
+        download_name=resultado['nome_arquivo'],
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+
+
+@app.route('/api/exportar/relatorio-inventario', methods=['GET'])
+@login_required
+def api_exportar_relatorio_inventario():
+    """Exporta relatório completo de inventário"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'erro': 'Módulo não disponível'}), 503
+    
+    resultado = exportar_relatorio_inventario_excel(get_empresa_id())
+    
+    if not resultado.get('sucesso'):
+        return jsonify({'erro': resultado.get('erro', 'Erro na exportação')}), 400
+    
+    try:
+        registrar_exportacao(
+            get_empresa_id(),
+            'relatorio_inventario',
+            resultado.get('nome_arquivo'),
+            'xlsx',
+            0
+        )
+    except:
+        pass
+    
+    return send_file(
+        resultado['arquivo'],
+        as_attachment=True,
+        download_name=resultado['nome_arquivo'],
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
+# ENDPOINTS PARA DASHBOARD
+# ═══════════════════════════════════════════════════════════════
+
+@app.route('/api/dashboard', methods=['GET'])
+@login_required
+def api_dashboard():
+    """Retorna dados consolidados do dashboard"""
+    if not MODULOS_CARREGADOS:
+        return jsonify({'erro': 'Módulo não disponível'}), 503
+    
+    dados_dashboard = {
+        'inventario': obter_estatisticas_inventario(get_empresa_id()),
+        'alertas_estoque': obter_alertas_estoque(get_empresa_id()),
+        'agendamentos_proximos': obter_proximos_agendamentos(get_empresa_id(), 7),
+        'agendamentos_atrasados': obter_agendamentos_atrasados(get_empresa_id()),
+        'notificacoes_nao_lidas': contar_notif_nao_lidas(get_empresa_id()),
+    }
+    
+    return jsonify(dados_dashboard), 200
 
 
 # ═══════════════════════════════════════════
