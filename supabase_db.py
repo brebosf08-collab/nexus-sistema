@@ -107,6 +107,20 @@ def _normalizar_materia_prima_tabela(item):
     return item
 
 
+def registrar_historico_materia_prima(empresa_id, materia_id, tipo, quantidade, observacoes=''):
+    try:
+        supabase.table('historico_materias_primas').insert({
+            'empresa_id': empresa_id,
+            'materia_prima_id': materia_id,
+            'tipo': tipo,
+            'quantidade': int(float(quantidade or 0)),
+            'observacoes': observacoes or ''
+        }).execute()
+        return {'sucesso': True}
+    except Exception as e:
+        return {'sucesso': False, 'mensagem': str(e)}
+
+
 def _carregar_composicoes_produtos(empresa_id, produtos):
     if not produtos:
         return produtos
@@ -409,7 +423,9 @@ def criar_materia_prima(empresa_id, nome, unidade='un', quantidade=0, minimo=0, 
                 "quantidade": int(float(quantidade or 0)), "observacoes": 'Cadastro inicial de matéria-prima'
             }).execute()
         except:
-            pass
+            registrar_historico_materia_prima(
+                empresa_id, pid, 'entrada', quantidade, 'Cadastro inicial de matéria-prima'
+            )
         return {'sucesso': True, 'id': pid, 'materia_prima': _normalizar_materia_prima_tabela(res.data[0]) if 'unidade' in res.data[0] else _normalizar_materia_prima(res.data[0])}
     except Exception as e:
         return {'sucesso': False, 'mensagem': f'Erro no Banco: {str(e)}'}
@@ -466,6 +482,7 @@ def adicionar_estoque_materia_prima(empresa_id, materia_id, quantidade, observac
             return {'sucesso': False, 'mensagem': 'Matéria-prima não encontrada'}
         nova_qtd = int(r.data[0].get('quantidade') or 0) + int(quantidade)
         supabase.table('materias_primas').update({'quantidade': nova_qtd}).eq('id', materia_id).eq('empresa_id', empresa_id).execute()
+        registrar_historico_materia_prima(empresa_id, materia_id, 'entrada', quantidade, observacoes or 'Entrada de matéria-prima')
         return {'sucesso': True, 'nova_quantidade': nova_qtd}
     except Exception:
         return adicionar_estoque(empresa_id, materia_id, quantidade, observacoes or 'Entrada de matéria-prima')
@@ -481,6 +498,7 @@ def retirar_estoque_materia_prima(empresa_id, materia_id, quantidade, observacoe
             return {'sucesso': False, 'mensagem': 'Estoque insuficiente'}
         nova_qtd = atual - int(quantidade)
         supabase.table('materias_primas').update({'quantidade': nova_qtd}).eq('id', materia_id).eq('empresa_id', empresa_id).execute()
+        registrar_historico_materia_prima(empresa_id, materia_id, 'saida', quantidade, observacoes or 'Saída de matéria-prima')
         return {'sucesso': True, 'nova_quantidade': nova_qtd}
     except Exception:
         return retirar_estoque(empresa_id, materia_id, quantidade, observacoes or 'Saída de matéria-prima')
@@ -734,17 +752,35 @@ def atualizar_pedido(empresa_id, pedido_id, dados):
 # ═══════════════════════════════════════════
 
 def obter_historico(empresa_id, filtro_tipo=None, data_inicio=None, data_fim=None):
+    historico = []
     try:
         q = supabase.table('historico').select('*, produtos(nome)').eq('empresa_id', empresa_id)
         if filtro_tipo: q = q.eq('tipo', filtro_tipo)
         if data_inicio: q = q.gte('data_hora', data_inicio)
         if data_fim: q = q.lte('data_hora', data_fim + ' 23:59:59')
         res = q.order('data_hora', desc=True).execute()
-        hs = res.data
-        for h in hs: h['produto_nome'] = h.get('produtos', {}).get('nome', '') if h.get('produtos') else ''
-        return hs
+        hs = res.data or []
+        for h in hs:
+            h['produto_nome'] = h.get('produtos', {}).get('nome', '') if h.get('produtos') else ''
+            historico.append(h)
     except:
-        return []
+        pass
+
+    try:
+        q = supabase.table('historico_materias_primas').select('*, materias_primas(nome)').eq('empresa_id', empresa_id)
+        if filtro_tipo: q = q.eq('tipo', filtro_tipo)
+        if data_inicio: q = q.gte('data_hora', data_inicio)
+        if data_fim: q = q.lte('data_hora', data_fim + ' 23:59:59')
+        res = q.order('data_hora', desc=True).execute()
+        for h in (res.data or []):
+            h['produto_nome'] = h.get('materias_primas', {}).get('nome', '') if h.get('materias_primas') else ''
+            h['observacoes'] = h.get('observacoes') or 'Movimentação de matéria-prima'
+            h['origem'] = 'materia_prima'
+            historico.append(h)
+    except:
+        pass
+
+    return sorted(historico, key=lambda h: h.get('data_hora') or '', reverse=True)
 
 def criar_reuniao(empresa_id, titulo, descricao, data_hora, local_r='', participantes=''):
     try:
