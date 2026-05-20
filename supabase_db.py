@@ -95,6 +95,43 @@ def _normalizar_materia_prima(produto):
                 }]
     return produto
 
+
+def _normalizar_materia_prima_tabela(item):
+    item = dict(item)
+    item['tipo_item'] = 'materia_prima'
+    item['unidade'] = item.get('unidade') or 'un'
+    item['quantidade'] = int(float(item.get('quantidade') or 0))
+    item['minimo'] = int(float(item.get('minimo') or 0))
+    item['custo_unitario'] = float(item.get('custo_unitario') or 0)
+    item['custo'] = item['custo_unitario']
+    return item
+
+
+def _carregar_composicoes_produtos(empresa_id, produtos):
+    if not produtos:
+        return produtos
+    try:
+        produto_ids = [p['id'] for p in produtos]
+        vinculos = supabase.table('produto_materias_primas').select(
+            'produto_id, materia_prima_id, quantidade_por_produto, materias_primas(nome, unidade)'
+        ).eq('empresa_id', empresa_id).in_('produto_id', produto_ids).execute().data or []
+        por_produto = {}
+        for v in vinculos:
+            materia = v.get('materias_primas') or {}
+            por_produto.setdefault(v.get('produto_id'), []).append({
+                'materia_prima_id': v.get('materia_prima_id'),
+                'nome': materia.get('nome', ''),
+                'unidade': materia.get('unidade', 'un'),
+                'quantidade_por_produto': float(v.get('quantidade_por_produto') or 0),
+            })
+        for p in produtos:
+            if por_produto.get(p.get('id')):
+                p['materias_primas'] = por_produto[p.get('id')]
+    except Exception:
+        # Tabelas novas ainda não existem; usa composição guardada na descrição.
+        pass
+    return produtos
+
 # ═══════════════════════════════════════════
 # EMPRESAS & AUTH
 # ═══════════════════════════════════════════
@@ -285,7 +322,8 @@ def obter_produtos(empresa_id):
                 for p in produtos:
                     p['categoria_nome'] = ''
         produtos = [_normalizar_materia_prima(p) for p in produtos]
-        return [p for p in produtos if p.get('tipo_item') != 'materia_prima']
+        produtos = [p for p in produtos if p.get('tipo_item') != 'materia_prima']
+        return _carregar_composicoes_produtos(empresa_id, produtos)
     except Exception as e:
         print(f"Erro em obter_produtos: {e}")
         return []
@@ -300,9 +338,13 @@ def obter_produto(empresa_id, produto_id):
 
 def obter_materias_primas(empresa_id):
     try:
-        res = supabase.table('produtos').select('*').eq('empresa_id', empresa_id).order('nome').execute()
-        itens = [_normalizar_materia_prima(p) for p in (res.data or [])]
-        return [p for p in itens if p.get('tipo_item') == 'materia_prima']
+        try:
+            res = supabase.table('materias_primas').select('*').eq('empresa_id', empresa_id).order('nome').execute()
+            return [_normalizar_materia_prima_tabela(p) for p in (res.data or [])]
+        except Exception:
+            res = supabase.table('produtos').select('*').eq('empresa_id', empresa_id).order('nome').execute()
+            itens = [_normalizar_materia_prima(p) for p in (res.data or [])]
+            return [p for p in itens if p.get('tipo_item') == 'materia_prima']
     except Exception as e:
         print(f"Erro em obter_materias_primas: {e}")
         return []
@@ -319,15 +361,28 @@ def criar_materia_prima(empresa_id, nome, unidade='un', quantidade=0, minimo=0, 
             "empresa_id": empresa_id,
             "nome": nome.strip(),
             "sku": (sku or '').strip() or None,
-            "categoria_id": None,
-            "custo": float(custo_unitario or 0),
-            "preco": 0,
+            "unidade": (unidade or 'un').strip() or 'un',
             "quantidade": int(float(quantidade or 0)),
             "minimo": int(float(minimo or 0)),
-            "descricao": montar_descricao_materia_prima(descricao, unidade, custo_unitario),
-            "imagem": None
+            "custo_unitario": float(custo_unitario or 0),
+            "descricao": (descricao or '').strip(),
         }
-        res = supabase.table('produtos').insert(data).execute()
+        try:
+            res = supabase.table('materias_primas').insert(data).execute()
+        except Exception:
+            data = {
+                "empresa_id": empresa_id,
+                "nome": nome.strip(),
+                "sku": (sku or '').strip() or None,
+                "categoria_id": None,
+                "custo": float(custo_unitario or 0),
+                "preco": 0,
+                "quantidade": int(float(quantidade or 0)),
+                "minimo": int(float(minimo or 0)),
+                "descricao": montar_descricao_materia_prima(descricao, unidade, custo_unitario),
+                "imagem": None
+            }
+            res = supabase.table('produtos').insert(data).execute()
         if not res.data:
             return {'sucesso': False, 'mensagem': 'Erro ao inserir matéria-prima no banco.'}
 
@@ -339,13 +394,32 @@ def criar_materia_prima(empresa_id, nome, unidade='un', quantidade=0, minimo=0, 
             }).execute()
         except:
             pass
-        return {'sucesso': True, 'id': pid, 'materia_prima': _normalizar_materia_prima(res.data[0])}
+        return {'sucesso': True, 'id': pid, 'materia_prima': _normalizar_materia_prima_tabela(res.data[0]) if 'unidade' in res.data[0] else _normalizar_materia_prima(res.data[0])}
     except Exception as e:
         return {'sucesso': False, 'mensagem': f'Erro no Banco: {str(e)}'}
 
 
 def atualizar_materia_prima(empresa_id, materia_id, dados):
     try:
+        try:
+            atual = supabase.table('materias_primas').select('*').eq('id', materia_id).eq('empresa_id', empresa_id).execute()
+            if not atual.data:
+                return {'sucesso': False, 'mensagem': 'Matéria-prima não encontrada'}
+            atual_norm = _normalizar_materia_prima_tabela(atual.data[0])
+            update_data = {
+                'nome': (dados.get('nome', atual_norm.get('nome')) or '').strip(),
+                'sku': (dados.get('sku', atual_norm.get('sku')) or '').strip() or None,
+                'unidade': (dados.get('unidade', atual_norm.get('unidade')) or 'un').strip(),
+                'custo_unitario': float(dados.get('custo_unitario', atual_norm.get('custo_unitario', 0)) or 0),
+                'quantidade': int(float(dados.get('quantidade', atual_norm.get('quantidade', 0)) or 0)),
+                'minimo': int(float(dados.get('minimo', atual_norm.get('minimo', 0)) or 0)),
+                'descricao': dados.get('descricao', atual_norm.get('descricao', '')),
+            }
+            supabase.table('materias_primas').update(update_data).eq('id', materia_id).eq('empresa_id', empresa_id).execute()
+            return {'sucesso': True}
+        except Exception:
+            pass
+
         atual = supabase.table('produtos').select('*').eq('id', materia_id).eq('empresa_id', empresa_id).execute()
         if not atual.data:
             return {'sucesso': False, 'mensagem': 'Matéria-prima não encontrada'}
@@ -369,8 +443,61 @@ def atualizar_materia_prima(empresa_id, materia_id, dados):
         return {'sucesso': False, 'mensagem': str(e)}
 
 
+def adicionar_estoque_materia_prima(empresa_id, materia_id, quantidade, observacoes=''):
+    try:
+        r = supabase.table('materias_primas').select('quantidade').eq('id', materia_id).eq('empresa_id', empresa_id).execute()
+        if not r.data:
+            return {'sucesso': False, 'mensagem': 'Matéria-prima não encontrada'}
+        nova_qtd = int(r.data[0].get('quantidade') or 0) + int(quantidade)
+        supabase.table('materias_primas').update({'quantidade': nova_qtd}).eq('id', materia_id).eq('empresa_id', empresa_id).execute()
+        return {'sucesso': True, 'nova_quantidade': nova_qtd}
+    except Exception:
+        return adicionar_estoque(empresa_id, materia_id, quantidade, observacoes or 'Entrada de matéria-prima')
+
+
+def retirar_estoque_materia_prima(empresa_id, materia_id, quantidade, observacoes=''):
+    try:
+        r = supabase.table('materias_primas').select('quantidade').eq('id', materia_id).eq('empresa_id', empresa_id).execute()
+        if not r.data:
+            return {'sucesso': False, 'mensagem': 'Matéria-prima não encontrada'}
+        atual = int(r.data[0].get('quantidade') or 0)
+        if atual < int(quantidade):
+            return {'sucesso': False, 'mensagem': 'Estoque insuficiente'}
+        nova_qtd = atual - int(quantidade)
+        supabase.table('materias_primas').update({'quantidade': nova_qtd}).eq('id', materia_id).eq('empresa_id', empresa_id).execute()
+        return {'sucesso': True, 'nova_quantidade': nova_qtd}
+    except Exception:
+        return retirar_estoque(empresa_id, materia_id, quantidade, observacoes or 'Saída de matéria-prima')
+
+
 def deletar_materia_prima(empresa_id, materia_id):
-    return deletar_produto(empresa_id, materia_id)
+    try:
+        supabase.table('produto_materias_primas').delete().eq('materia_prima_id', materia_id).eq('empresa_id', empresa_id).execute()
+        supabase.table('materias_primas').delete().eq('id', materia_id).eq('empresa_id', empresa_id).execute()
+        return {'sucesso': True}
+    except Exception:
+        return deletar_produto(empresa_id, materia_id)
+
+
+def salvar_composicao_produto(empresa_id, produto_id, materias):
+    try:
+        supabase.table('produto_materias_primas').delete().eq('produto_id', produto_id).eq('empresa_id', empresa_id).execute()
+        rows = []
+        for m in materias or []:
+            mid = m.get('materia_prima_id') or m.get('id')
+            qtd = float(m.get('quantidade_por_produto') or 0)
+            if mid and qtd > 0:
+                rows.append({
+                    'empresa_id': empresa_id,
+                    'produto_id': produto_id,
+                    'materia_prima_id': int(mid),
+                    'quantidade_por_produto': qtd,
+                })
+        if rows:
+            supabase.table('produto_materias_primas').insert(rows).execute()
+        return {'sucesso': True}
+    except Exception as e:
+        return {'sucesso': False, 'mensagem': str(e)}
 
 def atualizar_produto(empresa_id, produto_id, dados):
     permitidos = ['nome', 'sku', 'categoria_id', 'custo', 'preco', 'minimo', 'descricao', 'imagem']

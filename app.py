@@ -81,6 +81,7 @@ from supabase_db import (
     criar_produto, obter_produtos, obter_produto, atualizar_produto, deletar_produto,
     adicionar_estoque, retirar_estoque,
     criar_materia_prima, obter_materias_primas, atualizar_materia_prima, deletar_materia_prima,
+    salvar_composicao_produto, adicionar_estoque_materia_prima, retirar_estoque_materia_prima,
     criar_vendedor, obter_vendedores, deletar_vendedor,
     criar_pedido, obter_pedidos, obter_pedido_detalhado, atualizar_status_pedido, atualizar_pedido,
     obter_historico,
@@ -568,6 +569,9 @@ def api_criar_produto():
     if not r.get('sucesso'):
         r['mensagem'] = r.get('mensagem') or r.get('erro') or 'Erro ao cadastrar produto'
         return jsonify(r), 400
+    produto_id = r.get('id') or r.get('produto_id')
+    if produto_id and materias_produto:
+        salvar_composicao_produto(empresa_id, produto_id, materias_produto)
     return jsonify(r), 201
 
 
@@ -675,7 +679,7 @@ def api_entrada_materia_prima(mid):
     qtd = _to_int_safe(data.get('quantidade', 0))
     if qtd <= 0:
         return jsonify({'sucesso': False, 'mensagem': 'Quantidade deve ser positiva'}), 400
-    r = adicionar_estoque(get_empresa_id(), mid, qtd, data.get('observacoes') or 'Entrada de matéria-prima')
+    r = adicionar_estoque_materia_prima(get_empresa_id(), mid, qtd, data.get('observacoes') or 'Entrada de matéria-prima')
     if not r.get('sucesso'):
         return jsonify(r), 400
     return jsonify(r)
@@ -688,7 +692,7 @@ def api_saida_materia_prima(mid):
     qtd = _to_int_safe(data.get('quantidade', 0))
     if qtd <= 0:
         return jsonify({'sucesso': False, 'mensagem': 'Quantidade deve ser positiva'}), 400
-    r = retirar_estoque(get_empresa_id(), mid, qtd, data.get('observacoes') or 'Saída de matéria-prima')
+    r = retirar_estoque_materia_prima(get_empresa_id(), mid, qtd, data.get('observacoes') or 'Saída de matéria-prima')
     if not r.get('sucesso'):
         return jsonify(r), 400
     return jsonify(r)
