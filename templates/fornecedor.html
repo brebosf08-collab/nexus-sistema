@@ -215,6 +215,16 @@
           <div class="field"><label>Quantidade Inicial *</label><input name="quantidade" type="number" min="0" required placeholder="0"></div>
           <div class="field"><label>Alerta Mínimo *</label><input name="minimo" type="number" min="0" required placeholder="5"></div>
         </div>
+        <!-- MATÉRIA-PRIMA OPCIONAL -->
+        <div style="background:rgba(16,185,129,0.04);border:1px solid rgba(16,185,129,0.14);border-radius:14px;padding:1.25rem;margin-bottom:1.25rem">
+          <div style="font-size:0.75rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1rem"><i class="fas fa-boxes-stacked" style="color:var(--green)"></i> Estoque de matéria-prima (opcional)</div>
+          <div class="form-grid">
+            <div class="field"><label>Matéria-prima</label><input name="materia_prima_nome" placeholder="Ex: Farinha, embalagem, insumo"></div>
+            <div class="field"><label>Unidade</label><input name="materia_prima_unidade" placeholder="kg, un, litros, caixas"></div>
+            <div class="field"><label>Quantidade em estoque</label><input name="materia_prima_quantidade" type="number" step="0.01" min="0" placeholder="0"></div>
+            <div class="field"><label>Alerta mínimo</label><input name="materia_prima_minimo" type="number" step="0.01" min="0" placeholder="0"></div>
+          </div>
+        </div>
         <!-- TEMPOS OPCIONAIS -->
         <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:14px;padding:1.25rem;margin-bottom:1.25rem">
           <div style="font-size:0.75rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1rem"><i class="fas fa-clock" style="color:var(--accent)"></i> Tempos (opcionais — ideal para alimentos, bebidas, etc.)</div>
@@ -296,7 +306,7 @@
         </select>
       </div>
       <div class="table-wrap">
-        <table><thead><tr><th>Produto</th><th>Categoria</th><th>Custo</th><th>Venda</th><th>Margem</th><th>Tempos</th><th>Estoque</th><th>Status</th><th>Ações</th></tr></thead>
+        <table><thead><tr><th>Produto</th><th>Categoria</th><th>Custo</th><th>Venda</th><th>Margem</th><th>Matéria-prima</th><th>Tempos</th><th>Estoque</th><th>Status</th><th>Ações</th></tr></thead>
         <tbody id="tb-estoque"></tbody></table>
       </div>
     </div>
@@ -795,6 +805,14 @@ function renderEstoque(prods){
     const stTxt=status==='zerado'?'Zerado':status==='baixo'?'Baixo':'OK';
     const margem=p.preco?Math.round(margemProduto(p))+'%':'-';
     const valorLinha=Number(p.preco||0)*q;
+    const materiaNome=p.materia_prima_nome||p.materia_prima?.nome||'';
+    const materiaQtd=Number(p.materia_prima_quantidade ?? p.materia_prima?.quantidade ?? 0);
+    const materiaUn=p.materia_prima_unidade||p.materia_prima?.unidade||'un';
+    const materiaMin=Number(p.materia_prima_minimo ?? p.materia_prima?.minimo ?? 0);
+    const materiaBaixa=materiaNome&&materiaQtd<=materiaMin;
+    const materiaHtml=materiaNome
+      ? `<b>${escapeHtml(materiaNome)}</b><span class="stock-pill ${materiaBaixa?'badge-low':''}">${materiaQtd} ${escapeHtml(materiaUn)} / mín ${materiaMin}</span>`
+      : '-';
     const tempos=[
       p.tempo_preparo?`⏱ Prep: ${p.tempo_preparo} ${p.tempo_preparo_unidade||'min'}`:'',
       p.tempo_entrega?`🚚 Entr: ${p.tempo_entrega} ${p.tempo_entrega_unidade||'min'}`:'',
@@ -804,6 +822,7 @@ function renderEstoque(prods){
       <td><b>${escapeHtml(p.nome)}</b>${p.sku?'<br><small style="color:var(--muted)">'+escapeHtml(p.sku)+'</small>':''}</td>
       <td>${escapeHtml(p.categoria_nome||'-')}</td><td>${fmt(p.custo)}</td><td>${fmt(p.preco)}<span class="stock-pill">Total: ${fmt(valorLinha)}</span></td>
       <td style="color:var(--green)">${margem}</td>
+      <td style="font-size:0.78rem">${materiaHtml}</td>
       <td style="font-size:0.78rem;color:var(--amber)">${tempos||'-'}</td>
       <td><b>${q}</b> / mín ${m}</td>
       <td><span class="badge ${st}">${stTxt}</span></td>
@@ -812,7 +831,7 @@ function renderEstoque(prods){
         <button class="btn btn-sm btn-danger" onclick="abrirAjusteEstoque(${p.id},'saida')" title="Saída"><i class="fas fa-minus"></i></button>
         <button class="btn btn-sm btn-danger" onclick="delProd(${p.id},'${String(p.nome||'').replace(/'/g,"\\'")}')" title="Excluir"><i class="fas fa-trash"></i></button>
       </td></tr>`;
-  }).join(''):'<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:2rem">Nenhum produto</td></tr>';
+  }).join(''):'<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:2rem">Nenhum produto</td></tr>';
 }
 document.addEventListener('DOMContentLoaded',()=>{
   const b=document.getElementById('busca-produto');
@@ -874,9 +893,17 @@ async function delProd(id,nome){
   catch(ex){notif('Erro: '+ex.message,'error');}
 }
 function exportarEstoqueCSV(){
-  const linhas=[['Produto','SKU','Categoria','Custo','Venda','Quantidade','Minimo','Status','Valor estoque']];
+  const linhas=[['Produto','SKU','Categoria','Custo','Venda','Quantidade','Minimo','Status','Matéria-prima','Qtd matéria-prima','Unidade matéria-prima','Mínimo matéria-prima','Valor estoque']];
   todosProds.forEach(p=>{
-    linhas.push([p.nome||'',p.sku||'',p.categoria_nome||'',Number(p.custo||0),Number(p.preco||0),Number(p.quantidade||0),Number(p.minimo||0),statusProduto(p),Number(p.preco||0)*Number(p.quantidade||0)]);
+    linhas.push([
+      p.nome||'',p.sku||'',p.categoria_nome||'',Number(p.custo||0),Number(p.preco||0),
+      Number(p.quantidade||0),Number(p.minimo||0),statusProduto(p),
+      p.materia_prima_nome||p.materia_prima?.nome||'',
+      Number(p.materia_prima_quantidade ?? p.materia_prima?.quantidade ?? 0),
+      p.materia_prima_unidade||p.materia_prima?.unidade||'',
+      Number(p.materia_prima_minimo ?? p.materia_prima?.minimo ?? 0),
+      Number(p.preco||0)*Number(p.quantidade||0)
+    ]);
   });
   const csv=linhas.map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});

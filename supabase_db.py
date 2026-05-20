@@ -1,4 +1,5 @@
 import os
+import json
 from supabase import create_client, Client
 try:
     from dotenv import load_dotenv
@@ -14,10 +15,31 @@ if not SUPABASE_KEY:
     raise RuntimeError("SUPABASE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY must be defined as an environment variable")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+MATERIA_PRIMA_MARKER = '[DADOS_MATERIA_PRIMA] '
 
 def init_db():
     """No Supabase as tabelas são gerenciadas no dashboard/SQL Editor."""
     pass
+
+
+def _normalizar_materia_prima(produto):
+    descricao = produto.get('descricao') or ''
+    if MATERIA_PRIMA_MARKER not in descricao:
+        return produto
+
+    descricao_visivel, payload = descricao.split(MATERIA_PRIMA_MARKER, 1)
+    try:
+        materia = json.loads(payload.strip())
+    except Exception:
+        materia = {}
+
+    produto['descricao'] = descricao_visivel.strip()
+    produto['materia_prima'] = materia
+    produto['materia_prima_nome'] = materia.get('nome', '')
+    produto['materia_prima_quantidade'] = materia.get('quantidade', 0)
+    produto['materia_prima_unidade'] = materia.get('unidade', 'un')
+    produto['materia_prima_minimo'] = materia.get('minimo', 0)
+    return produto
 
 # ═══════════════════════════════════════════
 # EMPRESAS & AUTH
@@ -208,6 +230,8 @@ def obter_produtos(empresa_id):
             else:
                 for p in produtos:
                     p['categoria_nome'] = ''
+        for p in produtos:
+            _normalizar_materia_prima(p)
         return produtos
     except Exception as e:
         print(f"Erro em obter_produtos: {e}")
@@ -216,7 +240,7 @@ def obter_produtos(empresa_id):
 def obter_produto(empresa_id, produto_id):
     try:
         res = supabase.table('produtos').select('*').eq('id', produto_id).eq('empresa_id', empresa_id).execute()
-        return res.data[0] if res.data else None
+        return _normalizar_materia_prima(res.data[0]) if res.data else None
     except:
         return None
 

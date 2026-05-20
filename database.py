@@ -5,6 +5,28 @@ from contextlib import contextmanager
 from werkzeug.security import generate_password_hash, check_password_hash
 
 DATABASE = 'sistema.db'
+MATERIA_PRIMA_MARKER = '[DADOS_MATERIA_PRIMA] '
+
+
+def _normalizar_materia_prima(produto):
+    if not produto:
+        return produto
+    produto = dict(produto)
+    descricao = produto.get('descricao') or ''
+    if MATERIA_PRIMA_MARKER not in descricao:
+        return produto
+    descricao_visivel, payload = descricao.split(MATERIA_PRIMA_MARKER, 1)
+    try:
+        materia = json.loads(payload.strip())
+    except Exception:
+        materia = {}
+    produto['descricao'] = descricao_visivel.strip()
+    produto['materia_prima'] = materia
+    produto['materia_prima_nome'] = materia.get('nome', '')
+    produto['materia_prima_quantidade'] = materia.get('quantidade', 0)
+    produto['materia_prima_unidade'] = materia.get('unidade', 'un')
+    produto['materia_prima_minimo'] = materia.get('minimo', 0)
+    return produto
 
 
 @contextmanager
@@ -313,7 +335,7 @@ def obter_produtos(empresa_id):
             WHERE p.empresa_id = ?
             ORDER BY p.id DESC
         ''', (empresa_id,))
-        return [dict(r) for r in c.fetchall()]
+        return [_normalizar_materia_prima(r) for r in c.fetchall()]
 
 
 def obter_produto(empresa_id, produto_id):
@@ -321,7 +343,7 @@ def obter_produto(empresa_id, produto_id):
         c = conn.cursor()
         c.execute('SELECT * FROM produtos WHERE id = ? AND empresa_id = ?', (produto_id, empresa_id))
         r = c.fetchone()
-        return dict(r) if r else None
+        return _normalizar_materia_prima(r) if r else None
 
 
 def atualizar_produto(empresa_id, produto_id, dados):

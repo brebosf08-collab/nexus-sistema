@@ -68,6 +68,15 @@ def criar_produto_completo(empresa_id, dados_produto):
             'codigo_barras': dados_produto.get('codigo_barras', '').strip() or None,
             'margem_lucro': margem_lucro
         }
+
+        materia_prima = dados_produto.get('materia_prima') or {}
+        if materia_prima:
+            produto_completo.update({
+                'materia_prima_nome': materia_prima.get('nome'),
+                'materia_prima_quantidade': materia_prima.get('quantidade', 0),
+                'materia_prima_unidade': materia_prima.get('unidade', 'un'),
+                'materia_prima_minimo': materia_prima.get('minimo', 0),
+            })
         
         # Criar produto. Se o Supabase ainda não tiver as colunas novas,
         # salva com o schema base para o produto aparecer no inventário.

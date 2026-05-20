@@ -1,6 +1,7 @@
 import os
 import uuid
 import datetime
+import json
 from functools import wraps
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, abort, send_file
 from flask_cors import CORS
@@ -133,6 +134,49 @@ def login_required(f):
 
 def get_empresa_id():
     return session.get('empresa_id')
+
+MATERIA_PRIMA_MARKER = '[DADOS_MATERIA_PRIMA] '
+
+
+def _to_float_safe(val):
+    try:
+        return float(str(val or 0).replace(',', '.'))
+    except:
+        return 0.0
+
+
+def _to_int_safe(val):
+    try:
+        return int(float(str(val or 0).replace(',', '.')))
+    except:
+        return 0
+
+
+def extrair_materia_prima(data):
+    nome = (data.get('materia_prima_nome') or '').strip()
+    quantidade = _to_float_safe(data.get('materia_prima_quantidade', 0))
+    minimo = _to_float_safe(data.get('materia_prima_minimo', 0))
+    unidade = (data.get('materia_prima_unidade') or 'un').strip() or 'un'
+
+    if not nome and quantidade <= 0 and minimo <= 0:
+        return None
+
+    return {
+        'nome': nome or 'Matéria-prima',
+        'quantidade': quantidade,
+        'unidade': unidade,
+        'minimo': minimo,
+    }
+
+
+def anexar_materia_prima_descricao(descricao, materia_prima):
+    descricao = (descricao or '').strip()
+    if MATERIA_PRIMA_MARKER in descricao:
+        descricao = descricao.split(MATERIA_PRIMA_MARKER, 1)[0].strip()
+    if not materia_prima:
+        return descricao
+    payload = json.dumps(materia_prima, ensure_ascii=False, separators=(',', ':'))
+    return f"{descricao}\n\n{MATERIA_PRIMA_MARKER}{payload}".strip()
 
 
 # ═══════════════════════════════════════════
@@ -468,6 +512,9 @@ def api_criar_produto():
         else:
             return jsonify(cat_res), 400
 
+    materia_prima = extrair_materia_prima(data)
+    descricao = anexar_materia_prima_descricao(data.get('descricao', ''), materia_prima)
+
     # Usar módulo completo com inventário se disponível
     if PRODUTOS_MODULO_CARREGADO:
         dados_produto = {
@@ -478,9 +525,10 @@ def api_criar_produto():
             'preco': to_float(data.get('preco', 0)),
             'quantidade': to_int(data.get('quantidade', 0)),
             'minimo': to_int(data.get('minimo', 0)),
-            'descricao': data.get('descricao', ''),
+            'descricao': descricao,
             'imagem_url': imagem_url,
             'codigo_barras': data.get('codigo_barras', ''),
+            'materia_prima': materia_prima,
         }
         r = criar_produto_completo(empresa_id, dados_produto)
     else:
@@ -488,7 +536,7 @@ def api_criar_produto():
             empresa_id, nome, data.get('sku', ''), cat_id,
             to_float(data.get('custo', 0)), to_float(data.get('preco', 0)),
             to_int(data.get('quantidade', 0)), to_int(data.get('minimo', 0)),
-            data.get('descricao', ''), imagem_url
+            descricao, imagem_url
         )
 
     if not r.get('sucesso'):
@@ -589,6 +637,8 @@ def api_criar_produto_v2():
         except: return 0
     
     # Preparar dados do produto
+    materia_prima = extrair_materia_prima(data)
+    descricao = anexar_materia_prima_descricao(data.get('descricao', ''), materia_prima)
     dados_produto = {
         'nome': data.get('nome', ''),
         'sku': data.get('sku', ''),
@@ -597,9 +647,10 @@ def api_criar_produto_v2():
         'preco': to_float(data.get('preco')),
         'quantidade': to_int(data.get('quantidade')),
         'minimo': to_int(data.get('minimo')),
-        'descricao': data.get('descricao', ''),
+        'descricao': descricao,
         'imagem_url': imagem_url or data.get('imagem_url', ''),
-        'codigo_barras': data.get('codigo_barras', '')
+        'codigo_barras': data.get('codigo_barras', ''),
+        'materia_prima': materia_prima,
     }
     
     resultado = criar_produto_completo(empresa_id, dados_produto)
