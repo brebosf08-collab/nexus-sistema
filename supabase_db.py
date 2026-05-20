@@ -16,29 +16,83 @@ if not SUPABASE_KEY:
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 MATERIA_PRIMA_MARKER = '[DADOS_MATERIA_PRIMA] '
+TIPO_ITEM_MARKER = '[TIPO_ITEM] '
+MATERIA_ESTOQUE_MARKER = '[ESTOQUE_MATERIA_PRIMA] '
+MATERIAS_PRODUTO_MARKER = '[MATERIAS_PRIMAS_PRODUTO] '
 
 def init_db():
     """No Supabase as tabelas são gerenciadas no dashboard/SQL Editor."""
     pass
 
 
-def _normalizar_materia_prima(produto):
-    descricao = produto.get('descricao') or ''
-    if MATERIA_PRIMA_MARKER not in descricao:
-        return produto
-
-    descricao_visivel, payload = descricao.split(MATERIA_PRIMA_MARKER, 1)
+def _parse_json_marker(descricao, marker, default):
+    if marker not in descricao:
+        return default
+    payload = descricao.split(marker, 1)[1].split('\n', 1)[0].strip()
     try:
-        materia = json.loads(payload.strip())
+        return json.loads(payload)
     except Exception:
-        materia = {}
+        return default
 
-    produto['descricao'] = descricao_visivel.strip()
-    produto['materia_prima'] = materia
-    produto['materia_prima_nome'] = materia.get('nome', '')
-    produto['materia_prima_quantidade'] = materia.get('quantidade', 0)
-    produto['materia_prima_unidade'] = materia.get('unidade', 'un')
-    produto['materia_prima_minimo'] = materia.get('minimo', 0)
+
+def _parse_text_marker(descricao, marker, default=''):
+    if marker not in descricao:
+        return default
+    return descricao.split(marker, 1)[1].split('\n', 1)[0].strip()
+
+
+def _limpar_marcadores_descricao(descricao):
+    linhas = []
+    for linha in (descricao or '').splitlines():
+        if linha.startswith((MATERIA_PRIMA_MARKER, TIPO_ITEM_MARKER, MATERIA_ESTOQUE_MARKER, MATERIAS_PRODUTO_MARKER)):
+            continue
+        linhas.append(linha)
+    return '\n'.join(linhas).strip()
+
+
+def montar_descricao_materia_prima(descricao='', unidade='un', custo_unitario=0):
+    meta = {
+        'unidade': (unidade or 'un').strip() or 'un',
+        'custo_unitario': float(custo_unitario or 0),
+    }
+    base = _limpar_marcadores_descricao(descricao)
+    payload = json.dumps(meta, ensure_ascii=False, separators=(',', ':'))
+    return f"{base}\n{TIPO_ITEM_MARKER}materia_prima\n{MATERIA_ESTOQUE_MARKER}{payload}".strip()
+
+
+def _normalizar_materia_prima(produto):
+    produto = dict(produto)
+    descricao = produto.get('descricao') or ''
+    tipo_item = _parse_text_marker(descricao, TIPO_ITEM_MARKER, 'produto') or 'produto'
+    produto['tipo_item'] = tipo_item
+    produto['descricao'] = _limpar_marcadores_descricao(descricao)
+
+    materia_meta = _parse_json_marker(descricao, MATERIA_ESTOQUE_MARKER, {})
+    if tipo_item == 'materia_prima':
+        produto['materia_prima'] = True
+        produto['unidade'] = materia_meta.get('unidade', 'un')
+        produto['custo_unitario'] = materia_meta.get('custo_unitario', produto.get('custo') or 0)
+
+    materias_produto = _parse_json_marker(descricao, MATERIAS_PRODUTO_MARKER, [])
+    if materias_produto:
+        produto['materias_primas'] = materias_produto
+
+    # Compatibilidade com o formato antigo de uma matéria-prima dentro do produto.
+    if MATERIA_PRIMA_MARKER in descricao:
+        materia = _parse_json_marker(descricao, MATERIA_PRIMA_MARKER, {})
+        if materia:
+            produto['materia_prima'] = materia
+            produto['materia_prima_nome'] = materia.get('nome', '')
+            produto['materia_prima_quantidade'] = materia.get('quantidade', 0)
+            produto['materia_prima_unidade'] = materia.get('unidade', 'un')
+            produto['materia_prima_minimo'] = materia.get('minimo', 0)
+            if 'materias_primas' not in produto:
+                produto['materias_primas'] = [{
+                    'materia_prima_id': None,
+                    'nome': materia.get('nome', ''),
+                    'unidade': materia.get('unidade', 'un'),
+                    'quantidade_por_produto': materia.get('quantidade', 0),
+                }]
     return produto
 
 # ═══════════════════════════════════════════
@@ -230,9 +284,8 @@ def obter_produtos(empresa_id):
             else:
                 for p in produtos:
                     p['categoria_nome'] = ''
-        for p in produtos:
-            _normalizar_materia_prima(p)
-        return produtos
+        produtos = [_normalizar_materia_prima(p) for p in produtos]
+        return [p for p in produtos if p.get('tipo_item') != 'materia_prima']
     except Exception as e:
         print(f"Erro em obter_produtos: {e}")
         return []
@@ -243,6 +296,81 @@ def obter_produto(empresa_id, produto_id):
         return _normalizar_materia_prima(res.data[0]) if res.data else None
     except:
         return None
+
+
+def obter_materias_primas(empresa_id):
+    try:
+        res = supabase.table('produtos').select('*').eq('empresa_id', empresa_id).order('nome').execute()
+        itens = [_normalizar_materia_prima(p) for p in (res.data or [])]
+        return [p for p in itens if p.get('tipo_item') == 'materia_prima']
+    except Exception as e:
+        print(f"Erro em obter_materias_primas: {e}")
+        return []
+
+
+def criar_materia_prima(empresa_id, nome, unidade='un', quantidade=0, minimo=0, custo_unitario=0, sku='', descricao=''):
+    try:
+        if not empresa_id:
+            return {'sucesso': False, 'mensagem': 'Empresa não identificada.'}
+        if not (nome or '').strip():
+            return {'sucesso': False, 'mensagem': 'Nome da matéria-prima é obrigatório.'}
+
+        data = {
+            "empresa_id": empresa_id,
+            "nome": nome.strip(),
+            "sku": (sku or '').strip() or None,
+            "categoria_id": None,
+            "custo": float(custo_unitario or 0),
+            "preco": 0,
+            "quantidade": int(float(quantidade or 0)),
+            "minimo": int(float(minimo or 0)),
+            "descricao": montar_descricao_materia_prima(descricao, unidade, custo_unitario),
+            "imagem": None
+        }
+        res = supabase.table('produtos').insert(data).execute()
+        if not res.data:
+            return {'sucesso': False, 'mensagem': 'Erro ao inserir matéria-prima no banco.'}
+
+        pid = res.data[0]['id']
+        try:
+            supabase.table('historico').insert({
+                "empresa_id": empresa_id, "produto_id": pid, "tipo": 'entrada',
+                "quantidade": int(float(quantidade or 0)), "observacoes": 'Cadastro inicial de matéria-prima'
+            }).execute()
+        except:
+            pass
+        return {'sucesso': True, 'id': pid, 'materia_prima': _normalizar_materia_prima(res.data[0])}
+    except Exception as e:
+        return {'sucesso': False, 'mensagem': f'Erro no Banco: {str(e)}'}
+
+
+def atualizar_materia_prima(empresa_id, materia_id, dados):
+    try:
+        atual = supabase.table('produtos').select('*').eq('id', materia_id).eq('empresa_id', empresa_id).execute()
+        if not atual.data:
+            return {'sucesso': False, 'mensagem': 'Matéria-prima não encontrada'}
+        atual_norm = _normalizar_materia_prima(atual.data[0])
+
+        unidade = dados.get('unidade', atual_norm.get('unidade', 'un'))
+        custo_unitario = dados.get('custo_unitario', atual_norm.get('custo_unitario', atual_norm.get('custo', 0)))
+        descricao = dados.get('descricao', atual_norm.get('descricao', ''))
+        update_data = {
+            'nome': (dados.get('nome', atual_norm.get('nome')) or '').strip(),
+            'sku': (dados.get('sku', atual_norm.get('sku')) or '').strip() or None,
+            'custo': float(custo_unitario or 0),
+            'preco': 0,
+            'quantidade': int(float(dados.get('quantidade', atual_norm.get('quantidade', 0)) or 0)),
+            'minimo': int(float(dados.get('minimo', atual_norm.get('minimo', 0)) or 0)),
+            'descricao': montar_descricao_materia_prima(descricao, unidade, custo_unitario),
+        }
+        supabase.table('produtos').update(update_data).eq('id', materia_id).eq('empresa_id', empresa_id).execute()
+        return {'sucesso': True}
+    except Exception as e:
+        return {'sucesso': False, 'mensagem': str(e)}
+
+
+def deletar_materia_prima(empresa_id, materia_id):
+    return deletar_produto(empresa_id, materia_id)
 
 def atualizar_produto(empresa_id, produto_id, dados):
     permitidos = ['nome', 'sku', 'categoria_id', 'custo', 'preco', 'minimo', 'descricao', 'imagem']

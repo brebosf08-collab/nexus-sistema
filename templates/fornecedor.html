@@ -216,14 +216,23 @@
           <div class="field"><label>Quantidade Inicial *</label><input name="quantidade" type="number" min="0" required placeholder="0"></div>
           <div class="field"><label>Alerta Mínimo *</label><input name="minimo" type="number" min="0" required placeholder="5"></div>
         </div>
-        <!-- MATÉRIA-PRIMA OPCIONAL -->
+        <!-- MATÉRIAS-PRIMAS USADAS -->
         <div style="background:rgba(16,185,129,0.04);border:1px solid rgba(16,185,129,0.14);border-radius:14px;padding:1.25rem;margin-bottom:1.25rem">
-          <div style="font-size:0.75rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1rem"><i class="fas fa-boxes-stacked" style="color:var(--green)"></i> Estoque de matéria-prima (opcional)</div>
-          <div class="form-grid">
-            <div class="field"><label>Matéria-prima</label><input name="materia_prima_nome" placeholder="Ex: Farinha, embalagem, insumo"></div>
-            <div class="field"><label>Unidade</label><input name="materia_prima_unidade" placeholder="kg, un, litros, caixas"></div>
-            <div class="field"><label>Quantidade em estoque</label><input name="materia_prima_quantidade" type="number" step="0.01" min="0" placeholder="0"></div>
-            <div class="field"><label>Alerta mínimo</label><input name="materia_prima_minimo" type="number" step="0.01" min="0" placeholder="0"></div>
+          <div style="font-size:0.75rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1rem"><i class="fas fa-boxes-stacked" style="color:var(--green)"></i> Matérias-primas usadas no produto</div>
+          <div class="inline-form" style="align-items:flex-end;margin-bottom:1rem;flex-wrap:wrap">
+            <div class="field" style="flex:2;min-width:220px;margin:0">
+              <label>Matéria-prima</label>
+              <select id="sel-materia-prod"><option value="">Cadastre uma matéria-prima primeiro</option></select>
+            </div>
+            <div class="field" style="width:180px;margin:0">
+              <label>Qtd usada</label>
+              <input id="qtd-materia-prod" type="number" step="0.01" min="0" placeholder="Ex: 0,25">
+            </div>
+            <button type="button" class="btn btn-success" onclick="addMateriaAoProduto()"><i class="fas fa-plus"></i> Adicionar</button>
+          </div>
+          <input type="hidden" name="materias_primas_json" id="materias-prod-json" value="[]">
+          <div class="table-wrap">
+            <table><thead><tr><th>Matéria-prima</th><th>Qtd usada</th><th></th></tr></thead><tbody id="tb-materias-prod"><tr><td colspan="3" style="text-align:center;color:var(--muted);padding:1rem">Nenhuma matéria-prima adicionada</td></tr></tbody></table>
           </div>
         </div>
         <!-- TEMPOS OPCIONAIS -->
@@ -282,7 +291,6 @@
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:1rem;flex-wrap:wrap">
         <h3 style="margin:0">Produtos Cadastrados</h3>
-        <button class="btn btn-outline btn-sm" onclick="exportarEstoqueCSV()"><i class="fas fa-file-export"></i> Exportar CSV</button>
       </div>
       <div class="inventory-summary">
         <div class="mini-stat"><div class="mini-label">Itens cadastrados</div><div class="mini-value" id="inv-total">0</div></div>
@@ -317,6 +325,22 @@
   <div id="sec-materias" class="sec">
     <div class="page-title"><i class="fas fa-boxes-stacked"></i> Estoque de Matéria-prima</div>
     <div class="card">
+      <h3>Cadastrar Matéria-prima</h3>
+      <form onsubmit="addMateriaPrima(event)">
+        <div class="form-grid">
+          <div class="field"><label>Nome *</label><input name="nome" required placeholder="Ex: Farinha de trigo"></div>
+          <div class="field"><label>SKU / Referência</label><input name="sku" placeholder="MP-001"></div>
+          <div class="field"><label>Unidade *</label><input name="unidade" required value="kg" placeholder="kg, g, un, litros"></div>
+          <div class="field"><label>Custo unitário (R$)</label><input name="custo_unitario" type="number" step="0.01" min="0" placeholder="0,00"></div>
+          <div class="field"><label>Quantidade em estoque *</label><input name="quantidade" type="number" step="1" min="0" required placeholder="0"></div>
+          <div class="field"><label>Alerta mínimo *</label><input name="minimo" type="number" step="1" min="0" required placeholder="0"></div>
+          <div class="field full"><label>Observações</label><textarea name="descricao" placeholder="Ex: fornecedor, lote, validade..."></textarea></div>
+        </div>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Cadastrar Matéria-prima</button>
+      </form>
+      <div id="msg-materia" class="msg"></div>
+    </div>
+    <div class="card">
       <div class="inventory-summary">
         <div class="mini-stat"><div class="mini-label">Matérias cadastradas</div><div class="mini-value" id="mp-total">0</div></div>
         <div class="mini-stat"><div class="mini-label">Quantidade total</div><div class="mini-value" id="mp-qtd">0</div></div>
@@ -332,7 +356,7 @@
         </select>
       </div>
       <div class="table-wrap">
-        <table><thead><tr><th>Matéria-prima</th><th>Produto vinculado</th><th>Quantidade</th><th>Mínimo</th><th>Status</th></tr></thead>
+        <table><thead><tr><th>Matéria-prima</th><th>Custo</th><th>Quantidade</th><th>Mínimo</th><th>Status</th><th>Ações</th></tr></thead>
         <tbody id="tb-materias"></tbody></table>
       </div>
     </div>
@@ -777,9 +801,11 @@ async function verificarReunioes(){
 
 // ── ESTOQUE ────────────────────────────────────────────────────
 let todosProds=[];
+let materiasCache=[];
+let composicaoProduto=[];
 let ajusteAtual=null;
 async function loadCadastroProduto(){
-  await loadCategoriasSelect();
+  await Promise.all([loadCategoriasSelect(), loadMateriasSelect()]);
 }
 async function loadEstoque(){
   try{todosProds=await api('/api/produtos');aplicarFiltrosEstoque();await loadCategoriasSelect();}catch(e){console.error(e);}
@@ -795,14 +821,12 @@ function margemProduto(p){
   return preco>0?((preco-custo)/preco)*100:0;
 }
 function materiaPrimaProduto(p){
-  const materia=p.materia_prima||{};
-  const nome=p.materia_prima_nome||materia.nome||'';
-  if(!nome)return null;
-  const quantidade=Number(p.materia_prima_quantidade ?? materia.quantidade ?? 0);
-  const minimo=Number(p.materia_prima_minimo ?? materia.minimo ?? 0);
-  const unidade=p.materia_prima_unidade||materia.unidade||'un';
+  const nome=p.nome||'';
+  const quantidade=Number(p.quantidade||0);
+  const minimo=Number(p.minimo||0);
+  const unidade=p.unidade||'un';
   const status=quantidade<=0?'zerado':quantidade<=minimo?'baixo':'ok';
-  return {nome,quantidade,minimo,unidade,status,produto:p.nome||'-',produto_id:p.id};
+  return {id:p.id,nome,sku:p.sku||'',quantidade,minimo,unidade,status,custo_unitario:Number(p.custo_unitario||p.custo||0)};
 }
 function renderResumoEstoque(prods){
   const total=prods.length;
@@ -834,15 +858,16 @@ function aplicarFiltrosEstoque(){
 }
 async function loadMateriaPrima(){
   try{
-    todosProds=await api('/api/produtos');
+    materiasCache=await api('/api/materias-primas');
     aplicarFiltrosMateriaPrima();
+    loadMateriasSelect();
   }catch(e){console.error(e);}
 }
 function aplicarFiltrosMateriaPrima(){
   const termo=(document.getElementById('busca-materia')?.value||'').toLowerCase().trim();
   const filtro=document.getElementById('filtro-materia')?.value||'todos';
-  const materias=todosProds.map(materiaPrimaProduto).filter(Boolean).filter(m=>{
-    const texto=[m.nome,m.produto,m.unidade].join(' ').toLowerCase();
+  const materias=materiasCache.map(materiaPrimaProduto).filter(Boolean).filter(m=>{
+    const texto=[m.nome,m.sku,m.unidade].join(' ').toLowerCase();
     return (!termo||texto.includes(termo))&&(filtro==='todos'||m.status===filtro);
   }).sort((a,b)=>{
     const peso={zerado:0,baixo:1,ok:2};
@@ -862,13 +887,18 @@ function renderMateriaPrima(materias){
     const cls=m.status==='zerado'?'badge-zero':m.status==='baixo'?'badge-low':'badge-ok';
     const txt=m.status==='zerado'?'Zerado':m.status==='baixo'?'Baixo':'OK';
     return `<tr>
-      <td><b>${escapeHtml(m.nome)}</b><span class="stock-pill">${escapeHtml(m.unidade)}</span></td>
-      <td>${escapeHtml(m.produto)}</td>
+      <td><b>${escapeHtml(m.nome)}</b>${m.sku?'<span class="stock-pill">SKU: '+escapeHtml(m.sku)+'</span>':'<span class="stock-pill">'+escapeHtml(m.unidade)+'</span>'}</td>
+      <td>${fmt(m.custo_unitario)} / ${escapeHtml(m.unidade)}</td>
       <td><b>${m.quantidade.toLocaleString('pt-BR')}</b> ${escapeHtml(m.unidade)}</td>
       <td>${m.minimo.toLocaleString('pt-BR')} ${escapeHtml(m.unidade)}</td>
       <td><span class="badge ${cls}">${txt}</span></td>
+      <td style="display:flex;gap:0.4rem;flex-wrap:wrap">
+        <button class="btn btn-sm btn-success" onclick="ajustarMateriaPrima(${m.id},'entrada')" title="Entrada"><i class="fas fa-plus"></i></button>
+        <button class="btn btn-sm btn-danger" onclick="ajustarMateriaPrima(${m.id},'saida')" title="Saída"><i class="fas fa-minus"></i></button>
+        <button class="btn btn-sm btn-danger" onclick="delMateriaPrima(${m.id},'${String(m.nome||'').replace(/'/g,"\\'")}')" title="Excluir"><i class="fas fa-trash"></i></button>
+      </td>
     </tr>`;
-  }).join(''):'<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:2rem">Nenhuma matéria-prima cadastrada junto aos produtos</td></tr>';
+  }).join(''):'<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:2rem">Nenhuma matéria-prima cadastrada</td></tr>';
 }
 function renderEstoque(prods){
   const tb=document.getElementById('tb-estoque');
@@ -879,13 +909,9 @@ function renderEstoque(prods){
     const stTxt=status==='zerado'?'Zerado':status==='baixo'?'Baixo':'OK';
     const margem=p.preco?Math.round(margemProduto(p))+'%':'-';
     const valorLinha=Number(p.preco||0)*q;
-    const materiaNome=p.materia_prima_nome||p.materia_prima?.nome||'';
-    const materiaQtd=Number(p.materia_prima_quantidade ?? p.materia_prima?.quantidade ?? 0);
-    const materiaUn=p.materia_prima_unidade||p.materia_prima?.unidade||'un';
-    const materiaMin=Number(p.materia_prima_minimo ?? p.materia_prima?.minimo ?? 0);
-    const materiaBaixa=materiaNome&&materiaQtd<=materiaMin;
-    const materiaHtml=materiaNome
-      ? `<b>${escapeHtml(materiaNome)}</b><span class="stock-pill ${materiaBaixa?'badge-low':''}">${materiaQtd} ${escapeHtml(materiaUn)} / mín ${materiaMin}</span>`
+    const materias=Array.isArray(p.materias_primas)?p.materias_primas:[];
+    const materiaHtml=materias.length
+      ? materias.map(m=>`<div><b>${escapeHtml(m.nome||'Matéria-prima')}</b><span class="stock-pill">${Number(m.quantidade_por_produto||0).toLocaleString('pt-BR')} ${escapeHtml(m.unidade||'un')} por produto</span></div>`).join('')
       : '-';
     const tempos=[
       p.tempo_preparo?`⏱ Prep: ${p.tempo_preparo} ${p.tempo_preparo_unidade||'min'}`:'',
@@ -930,7 +956,10 @@ async function addProduto(e){
     if(!res.ok)throw new Error(j.mensagem||'Erro');
     setMsg('msg-prod','✅ Produto cadastrado!',true);
     e.target.reset();document.getElementById('new-cat-prod').value='';
+    composicaoProduto=[];
+    renderComposicaoProduto();
     await loadCategoriasSelect();
+    await loadMateriasSelect();
     await loadEstoque();
     loadDashboard();
     notif('Produto cadastrado!','success');
@@ -968,28 +997,99 @@ async function delProd(id,nome){
   try{await api(`/api/produtos/${id}`,{method:'DELETE'});notif('Produto removido.','success');loadEstoque();}
   catch(ex){notif('Erro: '+ex.message,'error');}
 }
-function exportarEstoqueCSV(){
-  const linhas=[['Produto','SKU','Categoria','Custo','Venda','Quantidade','Minimo','Status','Matéria-prima','Qtd matéria-prima','Unidade matéria-prima','Mínimo matéria-prima','Valor estoque']];
-  todosProds.forEach(p=>{
-    linhas.push([
-      p.nome||'',p.sku||'',p.categoria_nome||'',Number(p.custo||0),Number(p.preco||0),
-      Number(p.quantidade||0),Number(p.minimo||0),statusProduto(p),
-      p.materia_prima_nome||p.materia_prima?.nome||'',
-      Number(p.materia_prima_quantidade ?? p.materia_prima?.quantidade ?? 0),
-      p.materia_prima_unidade||p.materia_prima?.unidade||'',
-      Number(p.materia_prima_minimo ?? p.materia_prima?.minimo ?? 0),
-      Number(p.preco||0)*Number(p.quantidade||0)
-    ]);
-  });
-  const csv=linhas.map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='estoque-nexus.csv';
-  a.click();
-  URL.revokeObjectURL(a.href);
+
+async function addMateriaPrima(e){
+  e.preventDefault();
+  const f=e.target;
+  const data={
+    nome:f.nome.value.trim(),
+    sku:f.sku.value.trim(),
+    unidade:f.unidade.value.trim()||'un',
+    custo_unitario:Number(f.custo_unitario.value||0),
+    quantidade:Number(f.quantidade.value||0),
+    minimo:Number(f.minimo.value||0),
+    descricao:f.descricao.value.trim()
+  };
+  try{
+    await api('/api/materias-primas',{method:'POST',body:JSON.stringify(data)});
+    f.reset();
+    f.unidade.value='kg';
+    setMsg('msg-materia','✅ Matéria-prima cadastrada!',true);
+    await loadMateriaPrima();
+    await loadMateriasSelect();
+    notif('Matéria-prima cadastrada!','success');
+  }catch(ex){setMsg('msg-materia','❌ '+ex.message,false);}
 }
 
+async function loadMateriasSelect(){
+  try{
+    materiasCache=await api('/api/materias-primas');
+    const sel=document.getElementById('sel-materia-prod');
+    if(!sel)return;
+    sel.innerHTML=materiasCache.length
+      ? '<option value="">Selecione...</option>'+materiasCache.map(m=>`<option value="${m.id}" data-nome="${escapeHtml(m.nome)}" data-unidade="${escapeHtml(m.unidade||'un')}">${escapeHtml(m.nome)} (${Number(m.quantidade||0)} ${escapeHtml(m.unidade||'un')})</option>`).join('')
+      : '<option value="">Cadastre uma matéria-prima primeiro</option>';
+  }catch(e){console.error(e);}
+}
+
+function addMateriaAoProduto(){
+  const sel=document.getElementById('sel-materia-prod');
+  const qtd=Number(document.getElementById('qtd-materia-prod').value);
+  if(!sel?.value){notif('Selecione uma matéria-prima','warn');return;}
+  if(!qtd||qtd<=0){notif('Informe a quantidade usada','warn');return;}
+  const opt=sel.selectedOptions[0];
+  const id=Number(sel.value);
+  const existente=composicaoProduto.find(m=>Number(m.materia_prima_id)===id);
+  if(existente){
+    existente.quantidade_por_produto=qtd;
+  }else{
+    composicaoProduto.push({
+      materia_prima_id:id,
+      nome:opt.dataset.nome||opt.textContent,
+      unidade:opt.dataset.unidade||'un',
+      quantidade_por_produto:qtd
+    });
+  }
+  document.getElementById('qtd-materia-prod').value='';
+  renderComposicaoProduto();
+}
+
+function removeMateriaDoProduto(i){
+  composicaoProduto.splice(i,1);
+  renderComposicaoProduto();
+}
+
+function renderComposicaoProduto(){
+  document.getElementById('materias-prod-json').value=JSON.stringify(composicaoProduto);
+  const tb=document.getElementById('tb-materias-prod');
+  tb.innerHTML=composicaoProduto.length?composicaoProduto.map((m,i)=>`
+    <tr>
+      <td><b>${escapeHtml(m.nome)}</b></td>
+      <td>${Number(m.quantidade_por_produto||0).toLocaleString('pt-BR')} ${escapeHtml(m.unidade||'un')}</td>
+      <td><button type="button" class="btn btn-sm btn-danger" onclick="removeMateriaDoProduto(${i})"><i class="fas fa-times"></i></button></td>
+    </tr>`).join(''):'<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:1rem">Nenhuma matéria-prima adicionada</td></tr>';
+}
+
+async function ajustarMateriaPrima(id,tipo){
+  const qtd=prompt(tipo==='entrada'?'Quantidade para adicionar:':'Quantidade para retirar:');
+  if(!qtd||isNaN(qtd)||Number(qtd)<=0)return;
+  try{
+    await api(`/api/materias-primas/${id}/${tipo}`,{method:'POST',body:JSON.stringify({quantidade:Number(qtd)})});
+    notif('Estoque de matéria-prima atualizado!','success');
+    loadMateriaPrima();
+    loadMateriasSelect();
+  }catch(ex){notif('Erro: '+ex.message,'error');}
+}
+
+async function delMateriaPrima(id,nome){
+  if(!confirm(`Excluir matéria-prima "${nome}"?`))return;
+  try{
+    await api(`/api/materias-primas/${id}`,{method:'DELETE'});
+    notif('Matéria-prima removida.','success');
+    loadMateriaPrima();
+    loadMateriasSelect();
+  }catch(ex){notif('Erro: '+ex.message,'error');}
+}
 // ── CATEGORIAS ─────────────────────────────────────────────────
 async function loadCategorias(){
   try{const c=await api('/api/categorias');const tb=document.getElementById('tb-categorias');tb.innerHTML=c.length?c.map(c=>`<tr><td>${c.id}</td><td>${c.nome}</td><td><button class="btn btn-sm btn-danger" onclick="delCat(${c.id},'${c.nome}')"><i class="fas fa-trash"></i></button></td></tr>`).join(''):'<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:2rem">Nenhuma</td></tr>';}catch(e){}

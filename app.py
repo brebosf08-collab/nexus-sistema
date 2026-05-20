@@ -50,16 +50,9 @@ except ImportError as notificacoes_err:
     print(f"Aviso: módulo de notificações indisponível: {notificacoes_err}")
     NOTIFICACOES_MODULO_CARREGADO = False
 
-try:
-    from modulos.exportacao import (
-        exportar_produtos_excel, exportar_pedidos_excel,
-        exportar_relatorio_inventario_excel, exportar_produtos_csv,
-        exportar_relatorio_pdf_simples, registrar_exportacao
-    )
-    EXPORTACAO_MODULO_CARREGADO = True
-except ImportError as exportacao_err:
-    print(f"Aviso: módulo de exportação indisponível: {exportacao_err}")
-    EXPORTACAO_MODULO_CARREGADO = False
+# Exportação desativada. O fluxo de estoque agora fica todo dentro do sistema,
+# sem depender de planilhas/CSV.
+EXPORTACAO_MODULO_CARREGADO = False
 
 try:
     from modulos.carrinho import (
@@ -87,6 +80,7 @@ from supabase_db import (
     criar_categoria, obter_categorias, deletar_categoria,
     criar_produto, obter_produtos, obter_produto, atualizar_produto, deletar_produto,
     adicionar_estoque, retirar_estoque,
+    criar_materia_prima, obter_materias_primas, atualizar_materia_prima, deletar_materia_prima,
     criar_vendedor, obter_vendedores, deletar_vendedor,
     criar_pedido, obter_pedidos, obter_pedido_detalhado, atualizar_status_pedido, atualizar_pedido,
     obter_historico,
@@ -136,6 +130,9 @@ def get_empresa_id():
     return session.get('empresa_id')
 
 MATERIA_PRIMA_MARKER = '[DADOS_MATERIA_PRIMA] '
+MATERIAS_PRODUTO_MARKER = '[MATERIAS_PRIMAS_PRODUTO] '
+TIPO_ITEM_MARKER = '[TIPO_ITEM] '
+MATERIA_ESTOQUE_MARKER = '[ESTOQUE_MATERIA_PRIMA] '
 
 
 def _to_float_safe(val):
@@ -177,6 +174,50 @@ def anexar_materia_prima_descricao(descricao, materia_prima):
         return descricao
     payload = json.dumps(materia_prima, ensure_ascii=False, separators=(',', ':'))
     return f"{descricao}\n\n{MATERIA_PRIMA_MARKER}{payload}".strip()
+
+
+def limpar_marcadores_descricao(descricao):
+    linhas = []
+    for linha in (descricao or '').splitlines():
+        if linha.startswith((MATERIA_PRIMA_MARKER, MATERIAS_PRODUTO_MARKER, TIPO_ITEM_MARKER, MATERIA_ESTOQUE_MARKER)):
+            continue
+        linhas.append(linha)
+    return '\n'.join(linhas).strip()
+
+
+def extrair_materias_produto(data):
+    raw = data.get('materias_primas_json') or data.get('materias_primas') or ''
+    if not raw:
+        return []
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except Exception:
+            return []
+    materias = []
+    for item in raw if isinstance(raw, list) else []:
+        try:
+            materia_id = item.get('materia_prima_id') or item.get('id')
+            quantidade = _to_float_safe(item.get('quantidade_por_produto') or item.get('quantidade') or 0)
+        except AttributeError:
+            continue
+        if not materia_id or quantidade <= 0:
+            continue
+        materias.append({
+            'materia_prima_id': int(materia_id),
+            'nome': (item.get('nome') or '').strip(),
+            'unidade': (item.get('unidade') or 'un').strip() or 'un',
+            'quantidade_por_produto': quantidade,
+        })
+    return materias
+
+
+def anexar_materias_produto_descricao(descricao, materias):
+    descricao = limpar_marcadores_descricao(descricao)
+    if not materias:
+        return descricao
+    payload = json.dumps(materias, ensure_ascii=False, separators=(',', ':'))
+    return f"{descricao}\n\n{MATERIAS_PRODUTO_MARKER}{payload}".strip()
 
 
 # ═══════════════════════════════════════════
@@ -512,8 +553,8 @@ def api_criar_produto():
         else:
             return jsonify(cat_res), 400
 
-    materia_prima = extrair_materia_prima(data)
-    descricao = anexar_materia_prima_descricao(data.get('descricao', ''), materia_prima)
+    materias_produto = extrair_materias_produto(data)
+    descricao = anexar_materias_produto_descricao(data.get('descricao', ''), materias_produto)
 
     # Cadastro principal simples e estável. O inventário usa a própria tabela
     # de produtos, então o item já aparece salvo logo após cadastrar.
@@ -580,6 +621,79 @@ def api_saida_estoque(pid):
     return jsonify(r)
 
 
+# ═══════════════════════════════════════════
+# MATÉRIAS-PRIMAS API
+# ═══════════════════════════════════════════
+
+@app.route('/api/materias-primas', methods=['GET'])
+@login_required
+def api_materias_primas():
+    return jsonify(obter_materias_primas(get_empresa_id()))
+
+
+@app.route('/api/materias-primas', methods=['POST'])
+@login_required
+def api_criar_materia_prima():
+    if session.get('empresa_tipo') != 'fornecedor':
+        return jsonify({'sucesso': False, 'mensagem': 'Apenas fornecedores podem cadastrar matéria-prima'}), 403
+    data = request.get_json(force=True, silent=True) or {}
+    r = criar_materia_prima(
+        get_empresa_id(),
+        data.get('nome', ''),
+        unidade=data.get('unidade', 'un'),
+        quantidade=_to_int_safe(data.get('quantidade', 0)),
+        minimo=_to_int_safe(data.get('minimo', 0)),
+        custo_unitario=_to_float_safe(data.get('custo_unitario', 0)),
+        sku=data.get('sku', ''),
+        descricao=data.get('descricao', '')
+    )
+    if not r.get('sucesso'):
+        return jsonify(r), 400
+    return jsonify(r), 201
+
+
+@app.route('/api/materias-primas/<int:mid>', methods=['PUT'])
+@login_required
+def api_atualizar_materia_prima(mid):
+    data = request.get_json(force=True, silent=True) or {}
+    r = atualizar_materia_prima(get_empresa_id(), mid, data)
+    if not r.get('sucesso'):
+        return jsonify(r), 400
+    return jsonify(r)
+
+
+@app.route('/api/materias-primas/<int:mid>', methods=['DELETE'])
+@login_required
+def api_deletar_materia_prima(mid):
+    return jsonify(deletar_materia_prima(get_empresa_id(), mid))
+
+
+@app.route('/api/materias-primas/<int:mid>/entrada', methods=['POST'])
+@login_required
+def api_entrada_materia_prima(mid):
+    data = request.get_json(force=True, silent=True) or {}
+    qtd = _to_int_safe(data.get('quantidade', 0))
+    if qtd <= 0:
+        return jsonify({'sucesso': False, 'mensagem': 'Quantidade deve ser positiva'}), 400
+    r = adicionar_estoque(get_empresa_id(), mid, qtd, data.get('observacoes') or 'Entrada de matéria-prima')
+    if not r.get('sucesso'):
+        return jsonify(r), 400
+    return jsonify(r)
+
+
+@app.route('/api/materias-primas/<int:mid>/saida', methods=['POST'])
+@login_required
+def api_saida_materia_prima(mid):
+    data = request.get_json(force=True, silent=True) or {}
+    qtd = _to_int_safe(data.get('quantidade', 0))
+    if qtd <= 0:
+        return jsonify({'sucesso': False, 'mensagem': 'Quantidade deve ser positiva'}), 400
+    r = retirar_estoque(get_empresa_id(), mid, qtd, data.get('observacoes') or 'Saída de matéria-prima')
+    if not r.get('sucesso'):
+        return jsonify(r), 400
+    return jsonify(r)
+
+
 # ═══════════════════════════════════════════════════════════════
 # PRODUTOS V2 - COM INVENTÁRIO COMPLETO (NOVO)
 # ═══════════════════════════════════════════════════════════════
@@ -622,8 +736,8 @@ def api_criar_produto_v2():
         except: return 0
     
     # Preparar dados do produto
-    materia_prima = extrair_materia_prima(data)
-    descricao = anexar_materia_prima_descricao(data.get('descricao', ''), materia_prima)
+    materias_produto = extrair_materias_produto(data)
+    descricao = anexar_materias_produto_descricao(data.get('descricao', ''), materias_produto)
     dados_produto = {
         'nome': data.get('nome', ''),
         'sku': data.get('sku', ''),
@@ -635,7 +749,7 @@ def api_criar_produto_v2():
         'descricao': descricao,
         'imagem_url': imagem_url or data.get('imagem_url', ''),
         'codigo_barras': data.get('codigo_barras', ''),
-        'materia_prima': materia_prima,
+        'materias_primas': materias_produto,
     }
     
     resultado = criar_produto_completo(empresa_id, dados_produto)
@@ -1545,45 +1659,8 @@ def api_agendamentos_atrasados():
 @app.route('/api/exportar/produtos', methods=['GET'])
 @login_required
 def api_exportar_produtos():
-    """Exporta produtos para Excel"""
-    if not EXPORTACAO_MODULO_CARREGADO:
-        return jsonify({'erro': 'Módulo de exportação não disponível'}), 503
-
-    formato = request.args.get('formato', 'xlsx')
-
-    if formato == 'xlsx':
-        resultado = exportar_produtos_excel(get_empresa_id())
-    elif formato == 'csv':
-        resultado = exportar_produtos_csv(get_empresa_id())
-    elif formato == 'pdf':
-        resultado = exportar_relatorio_pdf_simples(get_empresa_id(), 'inventario')
-    else:
-        return jsonify({'erro': 'Formato não suportado'}), 400
-
-    if not resultado.get('sucesso'):
-        return jsonify({'erro': resultado.get('erro', 'Erro na exportação')}), 400
-
-    try:
-        registrar_exportacao(
-            get_empresa_id(),
-            'produtos',
-            resultado.get('nome_arquivo'),
-            formato,
-            resultado.get('total_registros', 0)
-        )
-    except:
-        pass
-
-    return send_file(
-        resultado['arquivo'],
-        as_attachment=True,
-        download_name=resultado['nome_arquivo'],
-        mimetype={
-            'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'csv': 'text/csv',
-            'pdf': 'application/pdf',
-        }.get(formato, 'application/octet-stream')
-    )
+    """Exportação removida para manter o estoque apenas no sistema."""
+    return jsonify({'sucesso': False, 'mensagem': 'Exportação removida. Use o inventário dentro do sistema.'}), 410
 
 
 
