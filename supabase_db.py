@@ -338,13 +338,29 @@ def obter_produto(empresa_id, produto_id):
 
 def obter_materias_primas(empresa_id):
     try:
+        materias = []
         try:
             res = supabase.table('materias_primas').select('*').eq('empresa_id', empresa_id).order('nome').execute()
-            return [_normalizar_materia_prima_tabela(p) for p in (res.data or [])]
-        except Exception:
+            materias.extend(_normalizar_materia_prima_tabela(p) for p in (res.data or []))
+        except Exception as e:
+            print(f"Aviso: tabela materias_primas indisponível, usando fallback em produtos: {e}")
+
+        try:
             res = supabase.table('produtos').select('*').eq('empresa_id', empresa_id).order('nome').execute()
             itens = [_normalizar_materia_prima(p) for p in (res.data or [])]
-            return [p for p in itens if p.get('tipo_item') == 'materia_prima']
+            materias.extend(p for p in itens if p.get('tipo_item') == 'materia_prima')
+        except Exception as e:
+            print(f"Aviso: fallback de matérias-primas em produtos indisponível: {e}")
+
+        vistos = set()
+        unicas = []
+        for item in materias:
+            chave = (item.get('tipo_item'), item.get('id'), item.get('nome'))
+            if chave in vistos:
+                continue
+            vistos.add(chave)
+            unicas.append(item)
+        return unicas
     except Exception as e:
         print(f"Erro em obter_materias_primas: {e}")
         return []

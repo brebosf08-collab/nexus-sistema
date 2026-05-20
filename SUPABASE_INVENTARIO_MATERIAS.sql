@@ -1,6 +1,3 @@
--- Execute este arquivo no SQL Editor do Supabase.
--- Ele cria tabelas reais para o estoque de matéria-prima e para a composição dos produtos.
-
 CREATE TABLE IF NOT EXISTS materias_primas (
     id BIGSERIAL PRIMARY KEY,
     empresa_id BIGINT NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
@@ -35,3 +32,20 @@ CREATE INDEX IF NOT EXISTS idx_produto_materias_produto
 
 CREATE INDEX IF NOT EXISTS idx_produto_materias_materia
     ON produto_materias_primas (materia_prima_id);
+
+ALTER TABLE materias_primas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE produto_materias_primas ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS materias_primas_all ON materias_primas;
+CREATE POLICY materias_primas_all
+    ON materias_primas
+    FOR ALL
+    USING (true)
+    WITH CHECK (true);
+
+DROP POLICY IF EXISTS produto_materias_primas_all ON produto_materias_primas;
+CREATE POLICY produto_materias_primas_all
+    ON produto_materias_primas
+    FOR ALL
+    USING (true)
+    WITH CHECK (true);
