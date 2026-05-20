@@ -82,7 +82,8 @@ def criar_produto_completo(empresa_id, dados_produto):
         # salva com o schema base para o produto aparecer no inventário.
         try:
             res = supabase.table('produtos').insert(produto_completo).execute()
-        except Exception:
+        except Exception as insert_err:
+            print(f"Aviso: salvando produto com schema base: {insert_err}")
             res = supabase.table('produtos').insert(produto_base).execute()
         
         if not res.data:

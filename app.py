@@ -515,29 +515,14 @@ def api_criar_produto():
     materia_prima = extrair_materia_prima(data)
     descricao = anexar_materia_prima_descricao(data.get('descricao', ''), materia_prima)
 
-    # Usar módulo completo com inventário se disponível
-    if PRODUTOS_MODULO_CARREGADO:
-        dados_produto = {
-            'nome': nome,
-            'sku': data.get('sku', ''),
-            'categoria_id': cat_id,
-            'custo': to_float(data.get('custo', 0)),
-            'preco': to_float(data.get('preco', 0)),
-            'quantidade': to_int(data.get('quantidade', 0)),
-            'minimo': to_int(data.get('minimo', 0)),
-            'descricao': descricao,
-            'imagem_url': imagem_url,
-            'codigo_barras': data.get('codigo_barras', ''),
-            'materia_prima': materia_prima,
-        }
-        r = criar_produto_completo(empresa_id, dados_produto)
-    else:
-        r = criar_produto(
-            empresa_id, nome, data.get('sku', ''), cat_id,
-            to_float(data.get('custo', 0)), to_float(data.get('preco', 0)),
-            to_int(data.get('quantidade', 0)), to_int(data.get('minimo', 0)),
-            descricao, imagem_url
-        )
+    # Cadastro principal simples e estável. O inventário usa a própria tabela
+    # de produtos, então o item já aparece salvo logo após cadastrar.
+    r = criar_produto(
+        empresa_id, nome, data.get('sku', ''), cat_id,
+        to_float(data.get('custo', 0)), to_float(data.get('preco', 0)),
+        to_int(data.get('quantidade', 0)), to_int(data.get('minimo', 0)),
+        descricao, imagem_url
+    )
 
     if not r.get('sucesso'):
         r['mensagem'] = r.get('mensagem') or r.get('erro') or 'Erro ao cadastrar produto'

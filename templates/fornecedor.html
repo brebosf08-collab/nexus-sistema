@@ -119,6 +119,7 @@
   <div class="nav-label">Estoque</div>
   <button class="nav-item" data-sec="produtos" onclick="navTo('produtos')"><i class="fas fa-square-plus"></i> Cadastrar Produto</button>
   <button class="nav-item" data-sec="estoque" onclick="navTo('estoque')"><i class="fas fa-box"></i> Inventário</button>
+  <button class="nav-item" data-sec="materias" onclick="navTo('materias')"><i class="fas fa-boxes-stacked"></i> Matéria-prima</button>
   <button class="nav-item" data-sec="categorias" onclick="navTo('categorias')"><i class="fas fa-tags"></i> Categorias</button>
   <div class="nav-label">Comercial</div>
   <button class="nav-item" data-sec="pedidos" onclick="navTo('pedidos')"><i class="fas fa-file-invoice-dollar"></i> Pedidos</button>
@@ -308,6 +309,31 @@
       <div class="table-wrap">
         <table><thead><tr><th>Produto</th><th>Categoria</th><th>Custo</th><th>Venda</th><th>Margem</th><th>Matéria-prima</th><th>Tempos</th><th>Estoque</th><th>Status</th><th>Ações</th></tr></thead>
         <tbody id="tb-estoque"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- MATÉRIA-PRIMA -->
+  <div id="sec-materias" class="sec">
+    <div class="page-title"><i class="fas fa-boxes-stacked"></i> Estoque de Matéria-prima</div>
+    <div class="card">
+      <div class="inventory-summary">
+        <div class="mini-stat"><div class="mini-label">Matérias cadastradas</div><div class="mini-value" id="mp-total">0</div></div>
+        <div class="mini-stat"><div class="mini-label">Quantidade total</div><div class="mini-value" id="mp-qtd">0</div></div>
+        <div class="mini-stat"><div class="mini-label">Alertas</div><div class="mini-value" id="mp-alertas" style="color:var(--amber)">0</div></div>
+      </div>
+      <div class="inventory-toolbar">
+        <input id="busca-materia" placeholder="Buscar por matéria-prima ou produto...">
+        <select id="filtro-materia" onchange="aplicarFiltrosMateriaPrima()">
+          <option value="todos">Todas</option>
+          <option value="ok">Estoque OK</option>
+          <option value="baixo">Estoque baixo</option>
+          <option value="zerado">Zeradas</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table><thead><tr><th>Matéria-prima</th><th>Produto vinculado</th><th>Quantidade</th><th>Mínimo</th><th>Status</th></tr></thead>
+        <tbody id="tb-materias"></tbody></table>
       </div>
     </div>
   </div>
@@ -547,7 +573,7 @@ function navTo(sec) {
   const el = document.getElementById('sec-' + sec);
   if (el) el.classList.add('active');
   document.querySelectorAll(`.nav-item[data-sec="${sec}"]`).forEach(n => n.classList.add('active'));
-  const loaders = {produtos:loadCadastroProduto,estoque:loadEstoque,categorias:loadCategorias,pedidos:loadPedidos,vendedores:loadVendedores,reunioes:loadReunioes,contatos:loadContatos,historico:loadHistorico,metas:loadMetas,vitrine:loadVitrine};
+  const loaders = {produtos:loadCadastroProduto,estoque:loadEstoque,materias:loadMateriaPrima,categorias:loadCategorias,pedidos:loadPedidos,vendedores:loadVendedores,reunioes:loadReunioes,contatos:loadContatos,historico:loadHistorico,metas:loadMetas,vitrine:loadVitrine};
   if (loaders[sec]) loaders[sec]();
 }
 
@@ -768,6 +794,16 @@ function margemProduto(p){
   const preco=Number(p.preco||0),custo=Number(p.custo||0);
   return preco>0?((preco-custo)/preco)*100:0;
 }
+function materiaPrimaProduto(p){
+  const materia=p.materia_prima||{};
+  const nome=p.materia_prima_nome||materia.nome||'';
+  if(!nome)return null;
+  const quantidade=Number(p.materia_prima_quantidade ?? materia.quantidade ?? 0);
+  const minimo=Number(p.materia_prima_minimo ?? materia.minimo ?? 0);
+  const unidade=p.materia_prima_unidade||materia.unidade||'un';
+  const status=quantidade<=0?'zerado':quantidade<=minimo?'baixo':'ok';
+  return {nome,quantidade,minimo,unidade,status,produto:p.nome||'-',produto_id:p.id};
+}
 function renderResumoEstoque(prods){
   const total=prods.length;
   const unidades=prods.reduce((s,p)=>s+Number(p.quantidade||0),0);
@@ -795,6 +831,44 @@ function aplicarFiltrosEstoque(){
   });
   renderResumoEstoque(lista);
   renderEstoque(lista);
+}
+async function loadMateriaPrima(){
+  try{
+    todosProds=await api('/api/produtos');
+    aplicarFiltrosMateriaPrima();
+  }catch(e){console.error(e);}
+}
+function aplicarFiltrosMateriaPrima(){
+  const termo=(document.getElementById('busca-materia')?.value||'').toLowerCase().trim();
+  const filtro=document.getElementById('filtro-materia')?.value||'todos';
+  const materias=todosProds.map(materiaPrimaProduto).filter(Boolean).filter(m=>{
+    const texto=[m.nome,m.produto,m.unidade].join(' ').toLowerCase();
+    return (!termo||texto.includes(termo))&&(filtro==='todos'||m.status===filtro);
+  }).sort((a,b)=>{
+    const peso={zerado:0,baixo:1,ok:2};
+    return (peso[a.status]-peso[b.status])||String(a.nome).localeCompare(String(b.nome),'pt-BR');
+  });
+  renderMateriaPrima(materias);
+}
+function renderMateriaPrima(materias){
+  const total=materias.length;
+  const quantidadeTotal=materias.reduce((s,m)=>s+Number(m.quantidade||0),0);
+  const alertas=materias.filter(m=>m.status!=='ok').length;
+  document.getElementById('mp-total').textContent=total;
+  document.getElementById('mp-qtd').textContent=quantidadeTotal.toLocaleString('pt-BR');
+  document.getElementById('mp-alertas').textContent=alertas;
+  const tb=document.getElementById('tb-materias');
+  tb.innerHTML=materias.length?materias.map(m=>{
+    const cls=m.status==='zerado'?'badge-zero':m.status==='baixo'?'badge-low':'badge-ok';
+    const txt=m.status==='zerado'?'Zerado':m.status==='baixo'?'Baixo':'OK';
+    return `<tr>
+      <td><b>${escapeHtml(m.nome)}</b><span class="stock-pill">${escapeHtml(m.unidade)}</span></td>
+      <td>${escapeHtml(m.produto)}</td>
+      <td><b>${m.quantidade.toLocaleString('pt-BR')}</b> ${escapeHtml(m.unidade)}</td>
+      <td>${m.minimo.toLocaleString('pt-BR')} ${escapeHtml(m.unidade)}</td>
+      <td><span class="badge ${cls}">${txt}</span></td>
+    </tr>`;
+  }).join(''):'<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:2rem">Nenhuma matéria-prima cadastrada junto aos produtos</td></tr>';
 }
 function renderEstoque(prods){
   const tb=document.getElementById('tb-estoque');
@@ -836,6 +910,8 @@ function renderEstoque(prods){
 document.addEventListener('DOMContentLoaded',()=>{
   const b=document.getElementById('busca-produto');
   if(b)b.addEventListener('input',aplicarFiltrosEstoque);
+  const bm=document.getElementById('busca-materia');
+  if(bm)bm.addEventListener('input',aplicarFiltrosMateriaPrima);
   subscribeEstoqueFornecedor();
   loadEstoque();
   loadCategorias();
