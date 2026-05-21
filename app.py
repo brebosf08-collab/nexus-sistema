@@ -988,7 +988,8 @@ def api_status_pedido(pid):
     status = (data.get('status') or '').strip()
     if not status:
         return jsonify({'sucesso': False, 'mensagem': 'Status é obrigatório'}), 400
-    return jsonify(atualizar_status_pedido(get_empresa_id(), pid, status))
+    r = atualizar_status_pedido(get_empresa_id(), pid, status)
+    return jsonify(r), 200 if r.get('sucesso') else 400
 
 
 # ═══════════════════════════════════════════

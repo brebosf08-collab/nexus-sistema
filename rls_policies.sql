@@ -122,6 +122,39 @@ CREATE TABLE IF NOT EXISTS carrinho (
     criado_em TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS materias_primas (
+    id SERIAL PRIMARY KEY,
+    empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE,
+    nome VARCHAR(255) NOT NULL,
+    sku VARCHAR(100),
+    unidade VARCHAR(30) DEFAULT 'un',
+    quantidade NUMERIC(12,3) DEFAULT 0,
+    minimo NUMERIC(12,3) DEFAULT 0,
+    custo_unitario NUMERIC(12,2) DEFAULT 0,
+    descricao TEXT,
+    criado_em TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS produto_materias_primas (
+    id SERIAL PRIMARY KEY,
+    empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE,
+    produto_id INTEGER REFERENCES produtos(id) ON DELETE CASCADE,
+    materia_prima_id INTEGER REFERENCES materias_primas(id) ON DELETE CASCADE,
+    quantidade_por_produto NUMERIC(12,3) NOT NULL DEFAULT 0,
+    criado_em TIMESTAMP DEFAULT NOW(),
+    UNIQUE(produto_id, materia_prima_id)
+);
+
+CREATE TABLE IF NOT EXISTS historico_materias_primas (
+    id SERIAL PRIMARY KEY,
+    empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE,
+    materia_prima_id INTEGER REFERENCES materias_primas(id) ON DELETE CASCADE,
+    tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('entrada', 'saida')),
+    quantidade NUMERIC(12,3) NOT NULL,
+    observacoes TEXT,
+    data_hora TIMESTAMP DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS reunioes (
     id SERIAL PRIMARY KEY,
     empresa_id INTEGER REFERENCES empresas(id) ON DELETE CASCADE,
@@ -192,6 +225,11 @@ CREATE INDEX IF NOT EXISTS idx_itens_pedido        ON itens_pedido(pedido_id);
 CREATE INDEX IF NOT EXISTS idx_carrinho_cliente    ON carrinho(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_carrinho_fornecedor ON carrinho(fornecedor_id);
 CREATE INDEX IF NOT EXISTS idx_carrinho_produto    ON carrinho(produto_id);
+CREATE INDEX IF NOT EXISTS idx_materias_empresa    ON materias_primas(empresa_id);
+CREATE INDEX IF NOT EXISTS idx_produto_materias_produto ON produto_materias_primas(produto_id);
+CREATE INDEX IF NOT EXISTS idx_produto_materias_materia ON produto_materias_primas(materia_prima_id);
+CREATE INDEX IF NOT EXISTS idx_hist_materias_empresa ON historico_materias_primas(empresa_id);
+CREATE INDEX IF NOT EXISTS idx_hist_materias_materia ON historico_materias_primas(materia_prima_id);
 CREATE INDEX IF NOT EXISTS idx_categorias_empresa  ON categorias(empresa_id);
 CREATE INDEX IF NOT EXISTS idx_vendedores_empresa  ON vendedores(empresa_id);
 CREATE INDEX IF NOT EXISTS idx_reunioes_empresa    ON reunioes(empresa_id);
@@ -290,6 +328,35 @@ CREATE POLICY "rls_carrinho_insert" ON carrinho FOR INSERT WITH CHECK (true);
 CREATE POLICY "rls_carrinho_update" ON carrinho FOR UPDATE USING (true);
 CREATE POLICY "rls_carrinho_delete" ON carrinho FOR DELETE USING (true);
 
+-- materias_primas
+ALTER TABLE materias_primas ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "rls_materias_select" ON materias_primas;
+DROP POLICY IF EXISTS "rls_materias_insert" ON materias_primas;
+DROP POLICY IF EXISTS "rls_materias_update" ON materias_primas;
+DROP POLICY IF EXISTS "rls_materias_delete" ON materias_primas;
+CREATE POLICY "rls_materias_select" ON materias_primas FOR SELECT USING (true);
+CREATE POLICY "rls_materias_insert" ON materias_primas FOR INSERT WITH CHECK (true);
+CREATE POLICY "rls_materias_update" ON materias_primas FOR UPDATE USING (true);
+CREATE POLICY "rls_materias_delete" ON materias_primas FOR DELETE USING (true);
+
+-- produto_materias_primas
+ALTER TABLE produto_materias_primas ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "rls_produto_materias_select" ON produto_materias_primas;
+DROP POLICY IF EXISTS "rls_produto_materias_insert" ON produto_materias_primas;
+DROP POLICY IF EXISTS "rls_produto_materias_update" ON produto_materias_primas;
+DROP POLICY IF EXISTS "rls_produto_materias_delete" ON produto_materias_primas;
+CREATE POLICY "rls_produto_materias_select" ON produto_materias_primas FOR SELECT USING (true);
+CREATE POLICY "rls_produto_materias_insert" ON produto_materias_primas FOR INSERT WITH CHECK (true);
+CREATE POLICY "rls_produto_materias_update" ON produto_materias_primas FOR UPDATE USING (true);
+CREATE POLICY "rls_produto_materias_delete" ON produto_materias_primas FOR DELETE USING (true);
+
+-- historico_materias_primas
+ALTER TABLE historico_materias_primas ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "rls_hist_materias_select" ON historico_materias_primas;
+DROP POLICY IF EXISTS "rls_hist_materias_insert" ON historico_materias_primas;
+CREATE POLICY "rls_hist_materias_select" ON historico_materias_primas FOR SELECT USING (true);
+CREATE POLICY "rls_hist_materias_insert" ON historico_materias_primas FOR INSERT WITH CHECK (true);
+
 -- reunioes
 ALTER TABLE reunioes ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "rls_reunioes_select" ON reunioes;
@@ -340,7 +407,8 @@ SELECT
     table_name,
     CASE WHEN table_name IN (
         'empresas','usuarios','categorias','produtos','historico',
-        'vendedores','pedidos','itens_pedido','reunioes',
+        'vendedores','pedidos','itens_pedido','carrinho',
+        'materias_primas','produto_materias_primas','historico_materias_primas','reunioes',
         'contatos','avisos','perfil_loja'
     ) THEN '✅ OK' ELSE '⚠️ Extra' END AS status
 FROM information_schema.tables

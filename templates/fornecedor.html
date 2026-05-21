@@ -70,6 +70,7 @@
     .badge-low{background:rgba(245,158,11,0.12);color:var(--amber);}
     .badge-zero{background:rgba(244,63,94,0.12);color:var(--red);}
     .badge-pendente{background:rgba(245,158,11,0.12);color:var(--amber);}
+    .badge-em_analise{background:rgba(99,102,241,0.12);color:var(--accent);}
     .badge-confirmado,.badge-pago,.badge-entregue{background:var(--green-g);color:var(--green);}
     .badge-cancelado{background:rgba(244,63,94,0.12);color:var(--red);}
     .badge-agendada{background:rgba(99,102,241,0.12);color:var(--accent);}
@@ -253,46 +254,6 @@
             <table><thead><tr><th>Matéria-prima</th><th>Qtd usada</th><th></th></tr></thead><tbody id="tb-materias-prod"><tr><td colspan="3" style="text-align:center;color:var(--muted);padding:1rem">Nenhuma matéria-prima adicionada</td></tr></tbody></table>
           </div>
         </div>
-        <!-- TEMPOS OPCIONAIS -->
-        <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:14px;padding:1.25rem;margin-bottom:1.25rem">
-          <div style="font-size:0.75rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1rem"><i class="fas fa-clock" style="color:var(--accent)"></i> Tempos (opcionais — ideal para alimentos, bebidas, etc.)</div>
-          <div class="form-grid">
-            <div class="field">
-              <label>Tempo de Preparo</label>
-              <div style="display:flex;gap:0.5rem">
-                <input name="tempo_preparo" type="number" min="0" placeholder="Ex: 30" style="flex:1">
-                <select name="tempo_preparo_unidade" style="width:110px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:0.7rem;color:#fff">
-                  <option value="minutos">minutos</option>
-                  <option value="horas">horas</option>
-                  <option value="dias">dias</option>
-                </select>
-              </div>
-            </div>
-            <div class="field">
-              <label>Tempo de Entrega</label>
-              <div style="display:flex;gap:0.5rem">
-                <input name="tempo_entrega" type="number" min="0" placeholder="Ex: 2" style="flex:1">
-                <select name="tempo_entrega_unidade" style="width:110px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:0.7rem;color:#fff">
-                  <option value="minutos">minutos</option>
-                  <option value="horas">horas</option>
-                  <option value="dias">dias</option>
-                </select>
-              </div>
-            </div>
-            <div class="field">
-              <label>Tempo de Produção</label>
-              <div style="display:flex;gap:0.5rem">
-                <input name="tempo_producao" type="number" min="0" placeholder="Ex: 1" style="flex:1">
-                <select name="tempo_producao_unidade" style="width:110px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:0.7rem;color:#fff">
-                  <option value="minutos">minutos</option>
-                  <option value="horas">horas</option>
-                  <option value="dias">dias</option>
-                </select>
-              </div>
-            </div>
-            <div class="field"><label>Data de Validade (se aplicável)</label><input name="validade" type="date"></div>
-          </div>
-        </div>
         <div class="form-grid">
           <div class="field full"><label>Descrição</label><textarea name="descricao" placeholder="Descreva o produto..."></textarea></div>
           <div class="field"><label>Imagem do Produto</label><input type="file" name="imagem" accept="image/*"></div>
@@ -348,7 +309,7 @@
         <div class="form-grid">
           <div class="field"><label>Nome *</label><input name="nome" required placeholder="Ex: Farinha de trigo"></div>
           <div class="field"><label>SKU / Referência</label><input name="sku" placeholder="MP-001"></div>
-          <div class="field"><label>Unidade *</label><input name="unidade" required value="kg" placeholder="kg, g, un, litros"></div>
+          <div class="field"><label>Unidade *</label><input name="unidade" required placeholder="Ex: g, un, litros"></div>
           <div class="field"><label>Custo unitário (R$)</label><input name="custo_unitario" type="number" step="0.01" min="0" placeholder="0,00"></div>
           <div class="field"><label>Quantidade em estoque *</label><input name="quantidade" type="number" step="1" min="0" required placeholder="0"></div>
           <div class="field"><label>Alerta mínimo *</label><input name="minimo" type="number" step="1" min="0" required placeholder="0"></div>
@@ -405,7 +366,7 @@
           <div class="field"><label>Cliente *</label><input name="cliente" required placeholder="Nome do cliente"></div>
           <div class="field"><label>Data *</label><input name="data_pedido" type="date" required></div>
           <div class="field"><label>Vendedor</label><select name="vendedor_id" id="sel-vend-pedido"><option value="">Sem vendedor</option></select></div>
-          <div class="field"><label>Forma de pagamento</label><select name="forma_pagamento" id="sel-forma-pagamento" class="status-sel"><option value="PIX">PIX</option><option value="Cartão de Crédito">Cartão de Crédito</option><option value="Cartão de Débito">Cartão de Débito</option><option value="Boleto">Boleto</option><option value="Transferência">Transferência</option><option value="Dinheiro">Dinheiro</option></select></div>
+          <div class="field"><label>Data de entrega</label><input name="data_entrega" type="date"></div>
           <div class="field"><label>Observações</label><input name="observacoes" placeholder="Notas..."></div>
         </div>
         <div style="background:rgba(255,255,255,0.02);padding:1.25rem;border-radius:16px;border:1px solid var(--border);margin-bottom:1.25rem">
@@ -415,11 +376,9 @@
             <button type="button" class="btn btn-primary" onclick="addItemPedido()"><i class="fas fa-plus"></i></button>
           </div>
           <div class="table-wrap">
-            <table><thead><tr><th>Item</th><th>Qtd</th><th>Preparo</th><th>Entrega</th><th>Preço</th><th>Subtotal</th><th></th></tr></thead><tbody id="tb-itens-pedido"></tbody></table>
+            <table><thead><tr><th>Item</th><th>Qtd</th><th>Preço</th><th>Subtotal</th><th></th></tr></thead><tbody id="tb-itens-pedido"></tbody></table>
           </div>
           <div style="text-align:right;margin-top:1rem;display:flex;justify-content:flex-end;gap:2rem;align-items:center;flex-wrap:wrap">
-            <span style="color:var(--muted);font-size:0.85rem">⏱ Preparo total: <b style="color:var(--amber)" id="tempo-total-pedido">0 min</b></span>
-            <span style="color:var(--muted);font-size:0.85rem">🚚 Entrega total: <b style="color:var(--accent)" id="entrega-total-pedido">0 min</b></span>
             <span style="font-size:1.4rem;font-weight:800;color:var(--green)">Total: <span id="total-pedido">R$ 0,00</span></span>
           </div>
         </div>
@@ -430,7 +389,7 @@
     <div class="card">
       <h3>Pedidos Registrados</h3>
       <div class="table-wrap">
-        <table><thead><tr><th>Pedido</th><th>Cliente</th><th>Pagamento</th><th>Vendedor</th><th>Data</th><th>Total</th><th>Comissão</th><th>Status</th><th>Alterar</th></tr></thead>
+        <table><thead><tr><th>Pedido</th><th>Cliente</th><th>Data de entrega</th><th>Vendedor</th><th>Data</th><th>Total</th><th>Comissão</th><th>Status</th><th>Alterar</th></tr></thead>
         <tbody id="tb-pedidos"></tbody></table>
       </div>
     </div>
@@ -593,7 +552,7 @@
     <h2 style="margin-bottom:1rem;">Editar Pedido</h2>
     <div style="display:grid;gap:1rem;">
       <div style="font-size:0.95rem;color:var(--muted);"><strong id="pedido-edit-id"></strong> · Cliente: <span id="pedido-edit-cliente"></span></div>
-      <div class="field"><label>Status</label><select id="pedido-edit-status" class="status-sel"><option value="pendente">Pendente</option><option value="confirmado">Confirmado</option><option value="pago">Pago</option><option value="entregue">Entregue</option><option value="cancelado">Cancelado</option></select></div>
+      <div class="field"><label>Status</label><select id="pedido-edit-status" class="status-sel"><option value="pendente">Pendente</option><option value="em_analise">Em análise</option><option value="confirmado">Confirmado</option><option value="entregue">Entregue</option><option value="cancelado">Cancelado</option></select></div>
       <div class="field"><label>Vendedor</label><select id="pedido-edit-vendedor" class="status-sel"><option value="">Sem vendedor</option></select></div>
       <div class="field"><label>Data de Entrega</label><input id="pedido-edit-data-entrega" type="date" style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:0.8rem;color:#fff;width:100%"></div>
       <div class="field"><label>Forma de pagamento</label><select id="pedido-edit-forma-pagamento" class="status-sel"><option value="PIX">PIX</option><option value="Cartão de Crédito">Cartão de Crédito</option><option value="Cartão de Débito">Cartão de Débito</option><option value="Boleto">Boleto</option><option value="Transferência">Transferência</option><option value="Dinheiro">Dinheiro</option></select></div>
@@ -1046,9 +1005,7 @@ function renderEstoque(prods){
       ? materias.map(m=>`<div><b>${escapeHtml(m.nome||'Matéria-prima')}</b><span class="stock-pill">${Number(m.quantidade_por_produto||0).toLocaleString('pt-BR')} ${escapeHtml(m.unidade||'un')} por produto</span></div>`).join('')
       : '-';
     const tempos=[
-      p.tempo_preparo?`⏱ Prep: ${p.tempo_preparo} ${p.tempo_preparo_unidade||'min'}`:'',
-      p.tempo_entrega?`🚚 Entr: ${p.tempo_entrega} ${p.tempo_entrega_unidade||'min'}`:'',
-      p.tempo_producao?`🏭 Prod: ${p.tempo_producao} ${p.tempo_producao_unidade||'min'}`:''
+      p.tempo_entrega?`🚚 Entr: ${p.tempo_entrega} ${p.tempo_entrega_unidade||'min'}`:''
     ].filter(Boolean).join('<br>');
     return `<tr>
       <td><b>${escapeHtml(p.nome)}</b>${p.sku?'<br><small style="color:var(--muted)">'+escapeHtml(p.sku)+'</small>':''}</td>
@@ -1245,7 +1202,7 @@ async function loadPedidos(){
   try{
     const [pedidos,prods,vends]=await Promise.all([api('/api/pedidos'),api('/api/produtos'),api('/api/vendedores')]);
     const selP=document.getElementById('sel-prod-pedido');
-    selP.innerHTML=prods.map(p=>`<option value="${p.id}" data-preco="${p.preco}" data-stock="${p.quantidade||0}" data-prep="${p.tempo_preparo||0}" data-prep-un="${p.tempo_preparo_unidade||'min'}" data-entr="${p.tempo_entrega||0}" data-entr-un="${p.tempo_entrega_unidade||'min'}" ${Number(p.quantidade||0)<=0?'disabled':''}>${p.nome} (${p.quantidade} un.) — ${fmt(p.preco)}</option>`).join('');
+    selP.innerHTML=prods.map(p=>`<option value="${p.id}" data-preco="${p.preco}" data-stock="${p.quantidade||0}" ${Number(p.quantidade||0)<=0?'disabled':''}>${p.nome} (${p.quantidade} un.) — ${fmt(p.preco)}</option>`).join('');
     const selV=document.getElementById('sel-vend-pedido');
     selV.innerHTML='<option value="">Sem vendedor</option>'+vends.map(v=>`<option value="${v.id}" data-com="${v.comissao||0}">${v.nome} (${v.comissao||0}% comissão)</option>`).join('');
     const tb=document.getElementById('tb-pedidos');
@@ -1254,7 +1211,7 @@ async function loadPedidos(){
       const com=p.comissao_valor?fmt(p.comissao_valor):'-';
       return `<tr>
         <td><b>#${p.id}</b><div style="font-size:0.75rem;color:var(--muted);margin-top:0.35rem">Entrega: ${p.data_entrega?fmtData(p.data_entrega):'-'} · Mensagem: ${p.mensagem_cliente?('Sim'):'Não'}</div></td>
-        <td>${p.cliente_nome||'-'}</td><td>${p.forma_pagamento||'-'}</td><td>${vNome}</td>
+        <td>${p.cliente_nome||'-'}</td><td>${p.data_entrega?fmtData(p.data_entrega):'-'}</td><td>${vNome}</td>
         <td>${fmtData(p.data||p.criado_em)}</td>
         <td style="color:var(--green)">${fmt(p.total)}</td>
         <td style="color:var(--accent)">${com}</td>
@@ -1262,8 +1219,8 @@ async function loadPedidos(){
         <td style="display:flex;gap:0.4rem;flex-wrap:wrap;align-items:center;min-width:190px;">
           <select class="status-sel" onchange="mudarStatus(${p.id},this.value)">
             <option value="pendente" ${p.status==='pendente'?'selected':''}>Pendente</option>
+            <option value="em_analise" ${p.status==='em_analise'?'selected':''}>Em análise</option>
             <option value="confirmado" ${p.status==='confirmado'?'selected':''}>Confirmado</option>
-            <option value="pago" ${p.status==='pago'?'selected':''}>Pago</option>
             <option value="entregue" ${p.status==='entregue'?'selected':''}>Entregue</option>
             <option value="cancelado" ${p.status==='cancelado'?'selected':''}>Cancelado</option>
           </select>
@@ -1313,7 +1270,7 @@ async function salvarPedidoDetalhe(){
     notif('Pedido atualizado!','success');
     fecharPedidoDetalhe();
     loadPedidos();
-  }catch(ex){notif('Erro ao salvar pedido','error');}
+  }catch(ex){notif(ex.message || 'Erro ao salvar pedido','error');}
 }
 
 function calcularComissoes(pedidos,vends){
@@ -1333,16 +1290,14 @@ function addItemPedido(){
   const stock=parseInt(opt.dataset.stock)||0;
   if(qtd>stock){notif(`Estoque insuficiente. Disponível: ${stock} un.`,'warn');return;}
   const preco=parseFloat(opt.dataset.preco)||0;
-  itensPedido.push({produto_id:sel.value,nome:opt.text.split('(')[0].trim(),quantidade:qtd,preco,subtotal:qtd*preco,tempo_preparo:parseInt(opt.dataset.prep)||0,prep_un:opt.dataset.prepUn||'min',tempo_entrega:parseInt(opt.dataset.entr)||0,entr_un:opt.dataset.entrUn||'min'});
+  itensPedido.push({produto_id:sel.value,nome:opt.text.split('(')[0].trim(),quantidade:qtd,preco,subtotal:qtd*preco});
   renderItens();
 }
 function renderItens(){
   const tb=document.getElementById('tb-itens-pedido');
-  let total=0,prep=0,entr=0;
-  tb.innerHTML=itensPedido.map((it,i)=>{total+=it.subtotal;prep+=it.tempo_preparo*it.quantidade;entr+=it.tempo_entrega*it.quantidade;return`<tr><td>${it.nome}</td><td>${it.quantidade}</td><td style="color:var(--amber)">${it.tempo_preparo?it.tempo_preparo+' '+it.prep_un:'-'}</td><td style="color:var(--accent)">${it.tempo_entrega?it.tempo_entrega+' '+it.entr_un:'-'}</td><td>${fmt(it.preco)}</td><td style="color:var(--green)">${fmt(it.subtotal)}</td><td><button type="button" class="btn btn-sm btn-danger" onclick="removeItem(${i})"><i class="fas fa-times"></i></button></td></tr>`;}).join('');
+  let total=0;
+  tb.innerHTML=itensPedido.map((it,i)=>{total+=it.subtotal;return`<tr><td>${it.nome}</td><td>${it.quantidade}</td><td>${fmt(it.preco)}</td><td style="color:var(--green)">${fmt(it.subtotal)}</td><td><button type="button" class="btn btn-sm btn-danger" onclick="removeItem(${i})"><i class="fas fa-times"></i></button></td></tr>`;}).join('');
   document.getElementById('total-pedido').textContent=fmt(total);
-  document.getElementById('tempo-total-pedido').textContent=prep+' min';
-  document.getElementById('entrega-total-pedido').textContent=entr+' min';
 }
 function removeItem(i){itensPedido.splice(i,1);renderItens();}
 async function criarPedido(e){
@@ -1355,7 +1310,7 @@ async function criarPedido(e){
   const totalPed=itensPedido.reduce((s,i)=>s+i.subtotal,0);
   const comVal=(totalPed*comPct/100);
   try{
-    await api('/api/pedidos',{method:'POST',body:JSON.stringify({cliente_nome:fd.get('cliente'),data:fd.get('data_pedido'),vendedor_id:fd.get('vendedor_id')||null,forma_pagamento:fd.get('forma_pagamento')||null,observacoes:fd.get('observacoes'),itens:itensPedido,comissao_valor:comVal})});
+    await api('/api/pedidos',{method:'POST',body:JSON.stringify({cliente_nome:fd.get('cliente'),data:fd.get('data_pedido'),data_entrega:fd.get('data_entrega')||null,vendedor_id:fd.get('vendedor_id')||null,observacoes:fd.get('observacoes'),itens:itensPedido,comissao_valor:comVal})});
     setMsg('msg-pedido','✅ Pedido registrado!',true);
     itensPedido=[];renderItens();e.target.reset();
     loadPedidos();verificarMetas();

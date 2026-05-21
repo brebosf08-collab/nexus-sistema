@@ -113,7 +113,7 @@ def registrar_historico_materia_prima(empresa_id, materia_id, tipo, quantidade, 
             'empresa_id': empresa_id,
             'materia_prima_id': materia_id,
             'tipo': tipo,
-            'quantidade': int(float(quantidade or 0)),
+            'quantidade': float(quantidade or 0),
             'observacoes': observacoes or ''
         }).execute()
         return {'sucesso': True}
@@ -472,6 +472,90 @@ def salvar_composicao_produto(empresa_id, produto_id, materias):
     except Exception as e:
         return {'sucesso': False, 'mensagem': str(e)}
 
+
+MATERIA_PEDIDO_BAIXADA_MARKER = '[MATERIA_PRIMA_BAIXADA]'
+
+
+def baixar_materias_primas_do_pedido(empresa_id, pedido_id):
+    try:
+        pedido_res = supabase.table('pedidos').select('id, observacoes').eq('id', pedido_id).eq('empresa_id', empresa_id).execute()
+        if not pedido_res.data:
+            return {'sucesso': False, 'mensagem': 'Pedido não encontrado.'}
+
+        observacoes = pedido_res.data[0].get('observacoes') or ''
+        if MATERIA_PEDIDO_BAIXADA_MARKER in observacoes:
+            return {'sucesso': True, 'mensagem': 'Matérias-primas já baixadas para este pedido.'}
+
+        itens = supabase.table('itens_pedido').select('produto_id, quantidade, produtos(nome)').eq('pedido_id', pedido_id).execute().data or []
+        if not itens:
+            return {'sucesso': True, 'mensagem': 'Pedido sem itens para baixa de matéria-prima.'}
+
+        produto_ids = [int(i['produto_id']) for i in itens if i.get('produto_id')]
+        composicoes = supabase.table('produto_materias_primas').select(
+            'produto_id, materia_prima_id, quantidade_por_produto'
+        ).eq('empresa_id', empresa_id).in_('produto_id', produto_ids).execute().data or []
+
+        if not composicoes:
+            return {'sucesso': True, 'mensagem': 'Produtos sem composição de matéria-prima.'}
+
+        qtd_por_produto = {int(i['produto_id']): int(i.get('quantidade') or 0) for i in itens}
+        produto_nome = {
+            int(i['produto_id']): ((i.get('produtos') or {}).get('nome') or f"Produto {i.get('produto_id')}")
+            for i in itens if i.get('produto_id')
+        }
+        consumo = {}
+        origem = {}
+        for comp in composicoes:
+            mid = int(comp.get('materia_prima_id'))
+            pid = int(comp.get('produto_id'))
+            necessario = float(comp.get('quantidade_por_produto') or 0) * qtd_por_produto.get(pid, 0)
+            if necessario <= 0:
+                continue
+            consumo[mid] = consumo.get(mid, 0) + necessario
+            origem.setdefault(mid, []).append(f"{produto_nome.get(pid, 'Produto')}: {necessario:g}")
+
+        if not consumo:
+            return {'sucesso': True, 'mensagem': 'Sem consumo de matéria-prima para baixar.'}
+
+        materias = supabase.table('materias_primas').select('id, nome, quantidade, unidade').eq(
+            'empresa_id', empresa_id
+        ).in_('id', list(consumo.keys())).execute().data or []
+        materias_por_id = {int(m['id']): m for m in materias}
+
+        faltantes = []
+        for mid, necessario in consumo.items():
+            materia = materias_por_id.get(mid)
+            atual = float((materia or {}).get('quantidade') or 0)
+            if not materia or atual < necessario:
+                nome = (materia or {}).get('nome') or f'Matéria-prima {mid}'
+                unidade = (materia or {}).get('unidade') or 'un'
+                faltantes.append(f"{nome}: precisa {necessario:g} {unidade}, disponível {atual:g} {unidade}")
+
+        if faltantes:
+            return {
+                'sucesso': False,
+                'mensagem': 'Estoque insuficiente de matéria-prima: ' + '; '.join(faltantes)
+            }
+
+        for mid, necessario in consumo.items():
+            materia = materias_por_id[mid]
+            nova_qtd = float(materia.get('quantidade') or 0) - necessario
+            supabase.table('materias_primas').update({'quantidade': nova_qtd}).eq('id', mid).eq('empresa_id', empresa_id).execute()
+            registrar_historico_materia_prima(
+                empresa_id,
+                mid,
+                'saida',
+                necessario,
+                f"Pedido #{pedido_id} confirmado - {'; '.join(origem.get(mid, []))}"
+            )
+
+        nova_obs = f"{observacoes}\n{MATERIA_PEDIDO_BAIXADA_MARKER}".strip()
+        supabase.table('pedidos').update({'observacoes': nova_obs}).eq('id', pedido_id).eq('empresa_id', empresa_id).execute()
+        return {'sucesso': True, 'mensagem': 'Matérias-primas baixadas do estoque.'}
+
+    except Exception as e:
+        return {'sucesso': False, 'mensagem': str(e)}
+
 def atualizar_produto(empresa_id, produto_id, dados):
     permitidos = ['nome', 'sku', 'categoria_id', 'custo', 'preco', 'minimo', 'descricao', 'imagem']
     atualizacoes = {k: v for k, v in dados.items() if k in permitidos}
@@ -668,6 +752,11 @@ def obter_pedido_detalhado(empresa_id, pedido_id):
 
 def atualizar_status_pedido(empresa_id, pedido_id, status):
     try:
+        if status == 'confirmado':
+            baixa = baixar_materias_primas_do_pedido(empresa_id, pedido_id)
+            if not baixa.get('sucesso'):
+                return baixa
+
         supabase.table('pedidos').update({'status': status}).eq('id', pedido_id).eq('empresa_id', empresa_id).execute()
         return {'sucesso': True}
     except Exception as e:
@@ -679,6 +768,11 @@ def atualizar_pedido(empresa_id, pedido_id, dados):
     if not atualizacoes:
         return {'sucesso': False, 'mensagem': 'Nada para atualizar'}
     try:
+        if atualizacoes.get('status') == 'confirmado':
+            baixa = baixar_materias_primas_do_pedido(empresa_id, pedido_id)
+            if not baixa.get('sucesso'):
+                return baixa
+
         if 'comissao_valor' in atualizacoes:
             atualizacoes['comissao_valor'] = float(atualizacoes['comissao_valor'] or 0)
         supabase.table('pedidos').update(atualizacoes).eq('id', pedido_id).eq('empresa_id', empresa_id).execute()
