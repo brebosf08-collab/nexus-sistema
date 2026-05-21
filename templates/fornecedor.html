@@ -116,6 +116,7 @@
   <div class="logo"><i class="fas fa-tower-broadcast"></i> Nexus</div>
   <div class="nav-label">Principal</div>
   <button class="nav-item active" data-sec="dashboard" onclick="navTo('dashboard')"><i class="fas fa-chart-pie"></i> Dashboard</button>
+  <button class="nav-item" data-sec="notificacoes" onclick="navTo('notificacoes')"><i class="fas fa-bell"></i> Notificações <span id="nav-notificacoes-count" class="badge badge-low" style="margin-left:auto;display:none">0</span></button>
   <div class="nav-label">Estoque</div>
   <button class="nav-item" data-sec="produtos" onclick="navTo('produtos')"><i class="fas fa-square-plus"></i> Cadastrar Produto</button>
   <button class="nav-item" data-sec="estoque" onclick="navTo('estoque')"><i class="fas fa-box"></i> Inventário</button>
@@ -186,7 +187,7 @@
         <h3 style="margin:0"><i class="fas fa-bell" style="color:var(--amber)"></i> Notificações</h3>
         <button class="btn btn-sm btn-outline" onclick="marcarTodosAvisosLidos()"><i class="fas fa-check-double"></i> Marcar lidas</button>
       </div>
-      <div id="box-notificacoes" style="display:grid;gap:0.75rem"></div>
+      <div id="box-notificacoes" data-notificacoes-box style="display:grid;gap:0.75rem"></div>
     </div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
@@ -198,6 +199,22 @@
         </div>
       </div>
       <div class="chart-container"><canvas id="chart-lucro"></canvas></div>
+    </div>
+  </div>
+
+  <!-- NOTIFICAÇÕES -->
+  <div id="sec-notificacoes" class="sec">
+    <div class="page-title"><i class="fas fa-bell"></i> Painel de Notificações</div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="label">Alertas ativos</div><div class="value" id="n-alertas" style="color:var(--red)">0</div><i class="fas fa-triangle-exclamation"></i></div>
+      <div class="stat-card"><div class="label">Avisos não lidos</div><div class="value" id="n-avisos" style="color:var(--amber)">0</div><i class="fas fa-bell"></i></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:1rem;flex-wrap:wrap">
+        <h3 style="margin:0"><i class="fas fa-bell" style="color:var(--amber)"></i> Notificações</h3>
+        <button class="btn btn-sm btn-outline" onclick="marcarTodosAvisosLidos()"><i class="fas fa-check-double"></i> Marcar lidas</button>
+      </div>
+      <div id="box-notificacoes-painel" data-notificacoes-box style="display:grid;gap:0.75rem"></div>
     </div>
   </div>
 
@@ -603,7 +620,7 @@ function navTo(sec) {
   const el = document.getElementById('sec-' + sec);
   if (el) el.classList.add('active');
   document.querySelectorAll(`.nav-item[data-sec="${sec}"]`).forEach(n => n.classList.add('active'));
-  const loaders = {produtos:loadCadastroProduto,estoque:loadEstoque,materias:loadMateriaPrima,categorias:loadCategorias,pedidos:loadPedidos,vendedores:loadVendedores,reunioes:loadReunioes,contatos:loadContatos,historico:loadHistorico,metas:loadMetas,vitrine:loadVitrine};
+  const loaders = {dashboard:loadDashboard,notificacoes:loadPainelNotificacoes,produtos:loadCadastroProduto,estoque:loadEstoque,materias:loadMateriaPrima,categorias:loadCategorias,pedidos:loadPedidos,vendedores:loadVendedores,reunioes:loadReunioes,contatos:loadContatos,historico:loadHistorico,metas:loadMetas,vitrine:loadVitrine};
   if (loaders[sec]) loaders[sec]();
 }
 
@@ -667,9 +684,19 @@ function copiarLink(){
 // ── DASHBOARD ──────────────────────────────────────────────────
 let chartInst=null;
 let dashboardAlertasCache=[];
+let dashboardJaCarregado=false;
+async function apiArray(url){
+  try{
+    const data=await api(url);
+    return Array.isArray(data)?data:[];
+  }catch(e){
+    console.warn('Falha ao carregar',url,e);
+    return [];
+  }
+}
 async function loadDashboard(){
   try{
-    const [prods,materias,pedidos]=await Promise.all([api('/api/estoque/produtos'),api('/api/estoque/materias-primas'),api('/api/pedidos')]);
+    const [prods,materias,pedidos]=await Promise.all([apiArray('/api/estoque/produtos'),apiArray('/api/estoque/materias-primas'),apiArray('/api/pedidos')]);
     // Garantir arrays válidos
     const prodArray=Array.isArray(prods)?prods:[];
     const materiasArray=Array.isArray(materias)?materias:[];
@@ -694,6 +721,7 @@ async function loadDashboard(){
     const baixasMaterias=materiasArray.filter(m=>Number(m.quantidade||0)<=Number(m.minimo||0)).map(m=>({tipo:'Matéria-prima',sec:'materias',nome:m.nome,quantidade:Number(m.quantidade||0),minimo:Number(m.minimo||0),unidade:m.unidade||'un'}));
     const baixos=[...baixosProdutos,...baixasMaterias];
     dashboardAlertasCache=baixos;
+    dashboardJaCarregado=true;
     document.getElementById('d-baixos').textContent=baixos.length;
     if(baixos.length>0){
       document.getElementById('card-alertas').style.display='block';
@@ -718,7 +746,10 @@ async function loadDashboard(){
         <div class="meta-progress"><div class="meta-bar" style="width:${pct}%;background:${pct>=100?'var(--green)':pct>=80?'var(--amber)':'var(--accent)'}"></div></div>
         <div style="text-align:right;font-size:0.8rem;color:var(--muted)">${pct}% concluído</div>`;
     }
-  }catch(e){console.error('Erro no dashboard:',e);}
+  }catch(e){
+    console.error('Erro no dashboard:',e);
+    notif('Não foi possível atualizar o dashboard agora','warn');
+  }
   loadAvisos();
   loadGrafico('semana');
   verificarReunioes();
@@ -784,11 +815,18 @@ function renderDashboardEstoque(prods,materias=[]){
 }
 
 async function loadAvisos(){
-  const box=document.getElementById('box-notificacoes');
-  if(!box)return;
-  try{
-    const avisos=await api('/api/avisos?nao_lidos=1');
-    const alertas=(dashboardAlertasCache||[]).slice(0,4).map(a=>`
+  const boxes=[...document.querySelectorAll('[data-notificacoes-box]')];
+  if(!boxes.length)return;
+  const setBoxes=html=>boxes.forEach(box=>{box.innerHTML=html;});
+  const atualizarContadores=(avisosQtd=0)=>{
+    const totalAlertas=(dashboardAlertasCache||[]).length;
+    const nav=document.getElementById('nav-notificacoes-count');
+    const total=totalAlertas+avisosQtd;
+    if(nav){nav.textContent=total;nav.style.display=total?'inline-flex':'none';}
+    const na=document.getElementById('n-alertas');if(na)na.textContent=totalAlertas;
+    const nv=document.getElementById('n-avisos');if(nv)nv.textContent=avisosQtd;
+  };
+  const renderAlertasLocais=()=> (dashboardAlertasCache||[]).slice(0,4).map(a=>`
       <div style="border:1px solid var(--border);border-radius:14px;padding:1rem;background:rgba(245,158,11,0.08);display:flex;justify-content:space-between;gap:1rem;align-items:flex-start">
         <div>
           <div style="font-weight:800">${a.quantidade<=0?'Estoque zerado':'Estoque baixo'}: ${escapeHtml(a.nome)}</div>
@@ -796,6 +834,10 @@ async function loadAvisos(){
         </div>
         <button class="btn btn-sm btn-outline" onclick="navTo('${a.sec}')"><i class="fas fa-arrow-right"></i></button>
       </div>`);
+  try{
+    const avisos=await apiArray('/api/avisos?nao_lidos=1');
+    atualizarContadores(avisos.length);
+    const alertas=renderAlertasLocais();
     const avisosApi=(Array.isArray(avisos)?avisos:[]).slice(0,Math.max(0,6-alertas.length)).map(a=>`
       <div style="border:1px solid var(--border);border-radius:14px;padding:1rem;background:rgba(255,255,255,0.02);display:flex;justify-content:space-between;gap:1rem;align-items:flex-start">
         <div>
@@ -805,17 +847,19 @@ async function loadAvisos(){
         <button class="btn btn-sm btn-outline" onclick="marcarAvisoLido(${a.id})"><i class="fas fa-check"></i></button>
       </div>`);
     const cards=[...alertas,...avisosApi];
-    box.innerHTML=cards.length?cards.join(''):'<div style="color:var(--muted);padding:1rem;border:1px solid var(--border);border-radius:14px">Nenhuma notificação nova.</div>';
+    setBoxes(cards.length?cards.join(''):'<div style="color:var(--muted);padding:1rem;border:1px solid var(--border);border-radius:14px">Nenhuma notificação nova.</div>');
   }catch(e){
-    const alertas=(dashboardAlertasCache||[]).slice(0,4);
-    box.innerHTML=alertas.length?alertas.map(a=>`
-      <div style="border:1px solid var(--border);border-radius:14px;padding:1rem;background:rgba(245,158,11,0.08);display:flex;justify-content:space-between;gap:1rem;align-items:flex-start">
-        <div>
-          <div style="font-weight:800">${a.quantidade<=0?'Estoque zerado':'Estoque baixo'}: ${escapeHtml(a.nome)}</div>
-          <div style="color:var(--muted);font-size:0.82rem;margin-top:0.35rem">${escapeHtml(a.tipo)} com ${a.quantidade} ${escapeHtml(a.unidade)}. Mínimo: ${a.minimo} ${escapeHtml(a.unidade)}.</div>
-        </div>
-        <button class="btn btn-sm btn-outline" onclick="navTo('${a.sec}')"><i class="fas fa-arrow-right"></i></button>
-      </div>`).join(''):'<div style="color:var(--muted);padding:1rem;border:1px solid var(--border);border-radius:14px">Notificações indisponíveis no momento.</div>';
+    atualizarContadores(0);
+    const alertas=renderAlertasLocais();
+    setBoxes(alertas.length?alertas.join(''):'<div style="color:var(--muted);padding:1rem;border:1px solid var(--border);border-radius:14px">Notificações indisponíveis no momento.</div>');
+  }
+}
+
+async function loadPainelNotificacoes(){
+  if(!dashboardJaCarregado){
+    await loadDashboard();
+  }else{
+    await loadAvisos();
   }
 }
 
