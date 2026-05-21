@@ -501,6 +501,18 @@ def api_produtos():
     return jsonify(obter_produtos(get_empresa_id()))
 
 
+@app.route('/api/estoque/produtos', methods=['GET'])
+@login_required
+def api_estoque_produtos():
+    return jsonify(obter_produtos(get_empresa_id()))
+
+
+@app.route('/api/estoque/materias-primas', methods=['GET'])
+@login_required
+def api_estoque_materias_primas():
+    return jsonify(obter_materias_primas(get_empresa_id()))
+
+
 @app.route('/api/produtos', methods=['POST'])
 @login_required
 def api_criar_produto():
@@ -570,21 +582,18 @@ def api_criar_produto():
     if not dados_produto['nome']:
         return jsonify({'sucesso': False, 'mensagem': 'Nome do produto é obrigatório'}), 400
 
-    if PRODUTOS_MODULO_CARREGADO:
-        resultado = criar_produto_completo(empresa_id, dados_produto)
-    else:
-        resultado = criar_produto(
-            empresa_id,
-            dados_produto['nome'],
-            dados_produto['sku'],
-            dados_produto['categoria_id'],
-            dados_produto['custo'],
-            dados_produto['preco'],
-            dados_produto['quantidade'],
-            dados_produto['minimo'],
-            dados_produto['descricao'],
-            dados_produto['imagem_url']
-        )
+    resultado = criar_produto(
+        empresa_id,
+        dados_produto['nome'],
+        dados_produto['sku'],
+        dados_produto['categoria_id'],
+        dados_produto['custo'],
+        dados_produto['preco'],
+        dados_produto['quantidade'],
+        dados_produto['minimo'],
+        dados_produto['descricao'],
+        dados_produto['imagem_url']
+    )
 
     if not resultado.get('sucesso'):
         resultado['mensagem'] = resultado.get('mensagem') or resultado.get('erro') or 'Erro ao cadastrar produto'
