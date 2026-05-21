@@ -158,6 +158,7 @@
     </div>
     <div class="stats-grid">
       <div class="stat-card"><div class="label">Produtos Ativos</div><div class="value" id="d-produtos">0</div><i class="fas fa-boxes"></i></div>
+      <div class="stat-card"><div class="label">Matérias-primas</div><div class="value" id="d-materias" style="color:var(--accent)">0</div><i class="fas fa-boxes-stacked"></i></div>
       <div class="stat-card"><div class="label">Valor (Custo)</div><div class="value" id="d-custo" style="color:var(--amber)">R$ 0</div><i class="fas fa-coins"></i></div>
       <div class="stat-card"><div class="label">Valor (Venda)</div><div class="value" id="d-valor" style="color:var(--green)">R$ 0</div><i class="fas fa-money-bill-trend-up"></i></div>
       <div class="stat-card"><div class="label">Alertas Estoque</div><div class="value" id="d-baixos" style="color:var(--red)">0</div><i class="fas fa-triangle-exclamation"></i></div>
@@ -171,14 +172,14 @@
     </div>
     <div id="card-alertas" class="card" style="display:none;margin-bottom:1.5rem">
       <h3><i class="fas fa-triangle-exclamation" style="color:var(--red)"></i> Alertas de Estoque</h3>
-      <div class="table-wrap"><table><thead><tr><th>Produto</th><th>Atual</th><th>Mínimo</th><th>Ação</th></tr></thead><tbody id="tb-alertas"></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>Item</th><th>Tipo</th><th>Atual</th><th>Mínimo</th><th>Ação</th></tr></thead><tbody id="tb-alertas"></tbody></table></div>
     </div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:1rem;flex-wrap:wrap">
         <h3 style="margin:0"><i class="fas fa-boxes-stacked" style="color:var(--accent)"></i> Estoque Agora</h3>
         <button class="btn btn-sm btn-outline" onclick="navTo('estoque')"><i class="fas fa-arrow-right"></i> Ver Inventário</button>
       </div>
-      <div class="table-wrap"><table><thead><tr><th>Produto</th><th>Qtd</th><th>Valor Venda</th><th>Status</th></tr></thead><tbody id="tb-dashboard-estoque"></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>Item</th><th>Qtd</th><th>Valor</th><th>Status</th></tr></thead><tbody id="tb-dashboard-estoque"></tbody></table></div>
     </div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:1rem;flex-wrap:wrap">
@@ -665,38 +666,45 @@ function copiarLink(){
 
 // ── DASHBOARD ──────────────────────────────────────────────────
 let chartInst=null;
+let dashboardAlertasCache=[];
 async function loadDashboard(){
   try{
-    const [prods,pedidos]=await Promise.all([api('/api/produtos'),api('/api/pedidos')]);
+    const [prods,materias,pedidos]=await Promise.all([api('/api/estoque/produtos'),api('/api/estoque/materias-primas'),api('/api/pedidos')]);
     // Garantir arrays válidos
     const prodArray=Array.isArray(prods)?prods:[];
+    const materiasArray=Array.isArray(materias)?materias:[];
     const pedidosArray=Array.isArray(pedidos)?pedidos:[];
 
     // Contadores básicos
     document.getElementById('d-produtos').textContent=prodArray.length;
+    const dm=document.getElementById('d-materias');if(dm)dm.textContent=materiasArray.length;
     document.getElementById('d-pedidos').textContent=pedidosArray.length;
 
     // Custo e venda calculados dos produtos
     const totalCusto=prodArray.reduce((s,p)=>s+Number(p.custo||0)*Number(p.quantidade||0),0);
     const totalVenda=prodArray.reduce((s,p)=>s+Number(p.preco||0)*Number(p.quantidade||0),0);
+    const totalMateria=materiasArray.reduce((s,m)=>s+Number(m.custo_unitario||m.custo||0)*Number(m.quantidade||0),0);
     const totalReceita=pedidosArray.reduce((s,p)=>s+Number(p.total||0),0);
-    document.getElementById('d-custo').textContent=fmt(totalCusto);
+    document.getElementById('d-custo').textContent=fmt(totalCusto+totalMateria);
     document.getElementById('d-valor').textContent=fmt(totalVenda);
     document.getElementById('d-receita').textContent=fmt(totalReceita);
 
     // Alertas de estoque
-    const baixos=prodArray.filter(p=>Number(p.quantidade||0)<=Number(p.minimo||0));
+    const baixosProdutos=prodArray.filter(p=>Number(p.quantidade||0)<=Number(p.minimo||0)).map(p=>({tipo:'Produto',sec:'estoque',nome:p.nome,quantidade:Number(p.quantidade||0),minimo:Number(p.minimo||0),unidade:'un'}));
+    const baixasMaterias=materiasArray.filter(m=>Number(m.quantidade||0)<=Number(m.minimo||0)).map(m=>({tipo:'Matéria-prima',sec:'materias',nome:m.nome,quantidade:Number(m.quantidade||0),minimo:Number(m.minimo||0),unidade:m.unidade||'un'}));
+    const baixos=[...baixosProdutos,...baixasMaterias];
+    dashboardAlertasCache=baixos;
     document.getElementById('d-baixos').textContent=baixos.length;
     if(baixos.length>0){
       document.getElementById('card-alertas').style.display='block';
       const tb=document.getElementById('tb-alertas');
-      tb.innerHTML=baixos.map(p=>`<tr><td><b>${p.nome}</b></td><td><span class="badge ${p.quantidade==0?'badge-zero':'badge-low'}">${p.quantidade}</span></td><td>${p.minimo}</td><td><button class="btn btn-sm btn-success" onclick="navTo('estoque')"><i class="fas fa-plus"></i> Repor</button></td></tr>`).join('');
-      baixos.forEach(p=>{if(p.quantidade==0)notif(`🔴 Produto ZERADO: ${p.nome}`,'error');else notif(`⚠️ Estoque baixo: ${p.nome} (${p.quantidade} un.)`,'warn');});
+      tb.innerHTML=baixos.map(p=>`<tr><td><b>${escapeHtml(p.nome)}</b></td><td>${p.tipo}</td><td><span class="badge ${p.quantidade==0?'badge-zero':'badge-low'}">${p.quantidade} ${escapeHtml(p.unidade)}</span></td><td>${p.minimo} ${escapeHtml(p.unidade)}</td><td><button class="btn btn-sm btn-success" onclick="navTo('${p.sec}')"><i class="fas fa-plus"></i> Repor</button></td></tr>`).join('');
+      notificarAlertasEstoque(baixos);
     }else{
       document.getElementById('card-alertas').style.display='none';
     }
 
-    renderDashboardEstoque(prodArray);
+    renderDashboardEstoque(prodArray,materiasArray);
 
     // Meta destaque
     const metas=getMetas();
@@ -716,21 +724,63 @@ async function loadDashboard(){
   verificarReunioes();
 }
 
-function renderDashboardEstoque(prods){
+function statusEstoqueQuantidade(qtd,minimo){
+  qtd=Number(qtd||0);
+  minimo=Number(minimo||0);
+  if(qtd<=0)return 'zerado';
+  if(qtd<=minimo)return 'baixo';
+  return 'ok';
+}
+
+function notificarAlertasEstoque(alertas){
+  if(!Array.isArray(alertas)||!alertas.length)return;
+  let vistos={};
+  try{vistos=JSON.parse(sessionStorage.getItem('nexus_alertas_estoque')||'{}')||{};}catch(e){vistos={};}
+  const hoje=new Date().toISOString().slice(0,10);
+  alertas.slice(0,5).forEach(a=>{
+    const key=`${hoje}:${a.tipo}:${a.nome}:${a.quantidade}`;
+    if(vistos[key])return;
+    vistos[key]=true;
+    const msg=a.quantidade<=0?`${a.tipo} zerado: ${a.nome}`:`${a.tipo} baixo: ${a.nome} (${a.quantidade} ${a.unidade})`;
+    notif(msg,a.quantidade<=0?'error':'warn');
+  });
+  try{sessionStorage.setItem('nexus_alertas_estoque',JSON.stringify(vistos));}catch(e){}
+}
+
+function renderDashboardEstoque(prods,materias=[]){
   const tb=document.getElementById('tb-dashboard-estoque');
   if(!tb)return;
-  const ordenados=[...prods].sort((a,b)=>{
-    const sa=statusProduto(a),sb=statusProduto(b);
+  const itens=[
+    ...prods.map(p=>({
+      nome:p.nome,
+      tipo:'Produto',
+      quantidade:Number(p.quantidade||0),
+      minimo:Number(p.minimo||0),
+      unidade:'un',
+      valor:Number(p.preco||0)*Number(p.quantidade||0),
+      sec:'estoque'
+    })),
+    ...materias.map(m=>({
+      nome:m.nome,
+      tipo:'Matéria-prima',
+      quantidade:Number(m.quantidade||0),
+      minimo:Number(m.minimo||0),
+      unidade:m.unidade||'un',
+      valor:Number(m.custo_unitario||m.custo||0)*Number(m.quantidade||0),
+      sec:'materias'
+    }))
+  ];
+  const ordenados=itens.sort((a,b)=>{
+    const sa=statusEstoqueQuantidade(a.quantidade,a.minimo),sb=statusEstoqueQuantidade(b.quantidade,b.minimo);
     const peso={zerado:0,baixo:1,ok:2};
     return (peso[sa]-peso[sb]) || Number(a.quantidade||0)-Number(b.quantidade||0);
   }).slice(0,8);
   tb.innerHTML=ordenados.length?ordenados.map(p=>{
-    const st=statusProduto(p);
+    const st=statusEstoqueQuantidade(p.quantidade,p.minimo);
     const cls=st==='zerado'?'badge-zero':st==='baixo'?'badge-low':'badge-ok';
     const txt=st==='zerado'?'Zerado':st==='baixo'?'Baixo':'OK';
-    const valor=Number(p.preco||0)*Number(p.quantidade||0);
-    return `<tr><td><b>${escapeHtml(p.nome)}</b></td><td>${Number(p.quantidade||0)}</td><td style="color:var(--green)">${fmt(valor)}</td><td><span class="badge ${cls}">${txt}</span></td></tr>`;
-  }).join(''):'<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:1.5rem">Nenhum produto cadastrado</td></tr>';
+    return `<tr><td><b>${escapeHtml(p.nome)}</b><div style="font-size:0.78rem;color:var(--muted);margin-top:0.2rem">${escapeHtml(p.tipo)}</div></td><td>${p.quantidade} ${escapeHtml(p.unidade)}</td><td style="color:var(--green)">${fmt(p.valor)}</td><td><span class="badge ${cls}">${txt}</span></td></tr>`;
+  }).join(''):'<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:1.5rem">Nenhum estoque cadastrado</td></tr>';
 }
 
 async function loadAvisos(){
@@ -738,16 +788,34 @@ async function loadAvisos(){
   if(!box)return;
   try{
     const avisos=await api('/api/avisos?nao_lidos=1');
-    box.innerHTML=avisos.length?avisos.slice(0,6).map(a=>`
+    const alertas=(dashboardAlertasCache||[]).slice(0,4).map(a=>`
+      <div style="border:1px solid var(--border);border-radius:14px;padding:1rem;background:rgba(245,158,11,0.08);display:flex;justify-content:space-between;gap:1rem;align-items:flex-start">
+        <div>
+          <div style="font-weight:800">${a.quantidade<=0?'Estoque zerado':'Estoque baixo'}: ${escapeHtml(a.nome)}</div>
+          <div style="color:var(--muted);font-size:0.82rem;margin-top:0.35rem">${escapeHtml(a.tipo)} com ${a.quantidade} ${escapeHtml(a.unidade)}. Mínimo: ${a.minimo} ${escapeHtml(a.unidade)}.</div>
+        </div>
+        <button class="btn btn-sm btn-outline" onclick="navTo('${a.sec}')"><i class="fas fa-arrow-right"></i></button>
+      </div>`);
+    const avisosApi=(Array.isArray(avisos)?avisos:[]).slice(0,Math.max(0,6-alertas.length)).map(a=>`
       <div style="border:1px solid var(--border);border-radius:14px;padding:1rem;background:rgba(255,255,255,0.02);display:flex;justify-content:space-between;gap:1rem;align-items:flex-start">
         <div>
           <div style="font-weight:800">${escapeHtml(a.titulo)}</div>
           <div style="color:var(--muted);font-size:0.82rem;margin-top:0.35rem">${escapeHtml(a.mensagem||'')}</div>
         </div>
         <button class="btn btn-sm btn-outline" onclick="marcarAvisoLido(${a.id})"><i class="fas fa-check"></i></button>
-      </div>`).join(''):'<div style="color:var(--muted);padding:1rem;border:1px solid var(--border);border-radius:14px">Nenhuma notificação nova.</div>';
+      </div>`);
+    const cards=[...alertas,...avisosApi];
+    box.innerHTML=cards.length?cards.join(''):'<div style="color:var(--muted);padding:1rem;border:1px solid var(--border);border-radius:14px">Nenhuma notificação nova.</div>';
   }catch(e){
-    box.innerHTML='<div style="color:var(--muted);padding:1rem;border:1px solid var(--border);border-radius:14px">Notificações indisponíveis no momento.</div>';
+    const alertas=(dashboardAlertasCache||[]).slice(0,4);
+    box.innerHTML=alertas.length?alertas.map(a=>`
+      <div style="border:1px solid var(--border);border-radius:14px;padding:1rem;background:rgba(245,158,11,0.08);display:flex;justify-content:space-between;gap:1rem;align-items:flex-start">
+        <div>
+          <div style="font-weight:800">${a.quantidade<=0?'Estoque zerado':'Estoque baixo'}: ${escapeHtml(a.nome)}</div>
+          <div style="color:var(--muted);font-size:0.82rem;margin-top:0.35rem">${escapeHtml(a.tipo)} com ${a.quantidade} ${escapeHtml(a.unidade)}. Mínimo: ${a.minimo} ${escapeHtml(a.unidade)}.</div>
+        </div>
+        <button class="btn btn-sm btn-outline" onclick="navTo('${a.sec}')"><i class="fas fa-arrow-right"></i></button>
+      </div>`).join(''):'<div style="color:var(--muted);padding:1rem;border:1px solid var(--border);border-radius:14px">Notificações indisponíveis no momento.</div>';
   }
 }
 
