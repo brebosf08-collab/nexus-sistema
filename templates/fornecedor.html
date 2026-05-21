@@ -590,6 +590,11 @@
 </div>
 
 <script>
+var todosProds=[];
+var materiasCache=[];
+var composicaoProduto=[];
+var ajusteAtual=null;
+
 // ── NAVEGAÇÃO ──────────────────────────────────────────────────
 function navTo(sec) {
   document.querySelectorAll('.sec').forEach(s => s.classList.remove('active'));
@@ -800,10 +805,6 @@ async function verificarReunioes(){
 }
 
 // ── ESTOQUE ────────────────────────────────────────────────────
-let todosProds=[];
-let materiasCache=[];
-let composicaoProduto=[];
-let ajusteAtual=null;
 async function loadCadastroProduto(){
   await Promise.all([loadCategoriasSelect(), loadMateriasSelect()]);
 }
