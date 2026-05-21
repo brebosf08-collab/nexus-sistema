@@ -514,10 +514,6 @@ def api_criar_produto():
         data = request.get_json(force=True, silent=True) or {}
 
     empresa_id = get_empresa_id()
-    nome = (data.get('nome') or '').strip()
-
-    if not nome:
-        return jsonify({'sucesso': False, 'mensagem': 'Nome do produto é obrigatório'}), 400
     if not empresa_id:
         return jsonify({'sucesso': False, 'mensagem': 'Sessão inválida. Faça login novamente.'}), 401
 
@@ -530,7 +526,7 @@ def api_criar_produto():
             if ext in ('jpg', 'jpeg', 'png', 'gif', 'webp'):
                 filename = secure_filename(f"{uuid.uuid4().hex}.{ext}")
                 img_file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                imagem_url = filename
+                imagem_url = f"/static/uploads/{filename}"
 
     def to_float(val):
         try: return float(str(val or 0).replace(',', '.'))
@@ -557,22 +553,59 @@ def api_criar_produto():
     materias_produto = extrair_materias_produto(data)
     descricao = anexar_materias_produto_descricao(data.get('descricao', ''), materias_produto)
 
-    # Cadastro principal simples e estável. O inventário usa a própria tabela
-    # de produtos, então o item já aparece salvo logo após cadastrar.
-    r = criar_produto(
-        empresa_id, nome, data.get('sku', ''), cat_id,
-        to_float(data.get('custo', 0)), to_float(data.get('preco', 0)),
-        to_int(data.get('quantidade', 0)), to_int(data.get('minimo', 0)),
-        descricao, imagem_url
-    )
+    dados_produto = {
+        'nome': (data.get('nome') or '').strip(),
+        'sku': data.get('sku', ''),
+        'categoria_id': cat_id,
+        'custo': to_float(data.get('custo', 0)),
+        'preco': to_float(data.get('preco', 0)),
+        'quantidade': to_int(data.get('quantidade', 0)),
+        'minimo': to_int(data.get('minimo', 0)),
+        'descricao': descricao,
+        'imagem_url': imagem_url or data.get('imagem_url', ''),
+        'codigo_barras': data.get('codigo_barras', ''),
+        'materias_primas': materias_produto,
+    }
 
-    if not r.get('sucesso'):
-        r['mensagem'] = r.get('mensagem') or r.get('erro') or 'Erro ao cadastrar produto'
-        return jsonify(r), 400
-    produto_id = r.get('id') or r.get('produto_id')
+    if not dados_produto['nome']:
+        return jsonify({'sucesso': False, 'mensagem': 'Nome do produto é obrigatório'}), 400
+
+    if PRODUTOS_MODULO_CARREGADO:
+        resultado = criar_produto_completo(empresa_id, dados_produto)
+    else:
+        resultado = criar_produto(
+            empresa_id,
+            dados_produto['nome'],
+            dados_produto['sku'],
+            dados_produto['categoria_id'],
+            dados_produto['custo'],
+            dados_produto['preco'],
+            dados_produto['quantidade'],
+            dados_produto['minimo'],
+            dados_produto['descricao'],
+            dados_produto['imagem_url']
+        )
+
+    if not resultado.get('sucesso'):
+        resultado['mensagem'] = resultado.get('mensagem') or resultado.get('erro') or 'Erro ao cadastrar produto'
+        return jsonify(resultado), 400
+
+    produto_id = resultado.get('produto_id') or resultado.get('id')
     if produto_id and materias_produto:
         salvar_composicao_produto(empresa_id, produto_id, materias_produto)
-    return jsonify(r), 201
+
+    if resultado.get('sucesso') and NOTIFICACOES_MODULO_CARREGADO:
+        try:
+            criar_notif_nova(
+                empresa_id,
+                '✓ Produto Cadastrado',
+                f"Novo produto '{dados_produto.get('nome')}' cadastrado com sucesso",
+                tipo='sucesso'
+            )
+        except:
+            pass
+
+    return jsonify(resultado), 201
 
 
 @app.route('/api/produtos/<int:pid>', methods=['PUT'])
