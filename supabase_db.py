@@ -19,6 +19,7 @@ MATERIA_PRIMA_MARKER = '[DADOS_MATERIA_PRIMA] '
 TIPO_ITEM_MARKER = '[TIPO_ITEM] '
 MATERIA_ESTOQUE_MARKER = '[ESTOQUE_MATERIA_PRIMA] '
 MATERIAS_PRODUTO_MARKER = '[MATERIAS_PRIMAS_PRODUTO] '
+TEMPO_PRODUTO_MARKER = '[TEMPO_PRODUTO] '
 
 def init_db():
     """No Supabase as tabelas são gerenciadas no dashboard/SQL Editor."""
@@ -44,7 +45,7 @@ def _parse_text_marker(descricao, marker, default=''):
 def _limpar_marcadores_descricao(descricao):
     linhas = []
     for linha in (descricao or '').splitlines():
-        if linha.startswith((MATERIA_PRIMA_MARKER, TIPO_ITEM_MARKER, MATERIA_ESTOQUE_MARKER, MATERIAS_PRODUTO_MARKER)):
+        if linha.startswith((MATERIA_PRIMA_MARKER, TIPO_ITEM_MARKER, MATERIA_ESTOQUE_MARKER, MATERIAS_PRODUTO_MARKER, TEMPO_PRODUTO_MARKER)):
             continue
         linhas.append(linha)
     return '\n'.join(linhas).strip()
@@ -76,6 +77,11 @@ def _normalizar_materia_prima(produto):
     materias_produto = _parse_json_marker(descricao, MATERIAS_PRODUTO_MARKER, [])
     if materias_produto:
         produto['materias_primas'] = materias_produto
+
+    tempo_produto = _parse_json_marker(descricao, TEMPO_PRODUTO_MARKER, {})
+    if tempo_produto:
+        produto['tempo_preparo'] = tempo_produto.get('tempo_preparo')
+        produto['tempo_preparo_unidade'] = tempo_produto.get('tempo_preparo_unidade', 'minutos')
 
     # Compatibilidade com o formato antigo de uma matéria-prima dentro do produto.
     if MATERIA_PRIMA_MARKER in descricao:

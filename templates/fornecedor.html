@@ -118,15 +118,16 @@
   <div class="nav-label">Principal</div>
   <button class="nav-item active" data-sec="dashboard" onclick="navTo('dashboard')"><i class="fas fa-chart-pie"></i> Dashboard</button>
   <button class="nav-item" data-sec="notificacoes" onclick="navTo('notificacoes')"><i class="fas fa-bell"></i> Notificações <span id="nav-notificacoes-count" class="badge badge-low" style="margin-left:auto;display:none">0</span></button>
-  <div class="nav-label">Estoque</div>
-  <button class="nav-item" data-sec="produtos" onclick="navTo('produtos')"><i class="fas fa-square-plus"></i> Cadastrar Produto</button>
-  <button class="nav-item" data-sec="estoque" onclick="navTo('estoque')"><i class="fas fa-box"></i> Inventário</button>
+  <div class="nav-label">Cadastros</div>
+  <button class="nav-item" data-sec="produtos" onclick="navTo('produtos')"><i class="fas fa-square-plus"></i> Produtos</button>
   <button class="nav-item" data-sec="materias" onclick="navTo('materias')"><i class="fas fa-boxes-stacked"></i> Matéria-prima</button>
+  <button class="nav-item" data-sec="entradas" onclick="navTo('entradas')"><i class="fas fa-truck-ramp-box"></i> Entradas</button>
   <button class="nav-item" data-sec="categorias" onclick="navTo('categorias')"><i class="fas fa-tags"></i> Categorias</button>
+  <div class="nav-label">Estoque</div>
+  <button class="nav-item" data-sec="estoque" onclick="navTo('estoque')"><i class="fas fa-box"></i> Inventário</button>
   <div class="nav-label">Comercial</div>
   <button class="nav-item" data-sec="pedidos" onclick="navTo('pedidos')"><i class="fas fa-file-invoice-dollar"></i> Pedidos</button>
   <button class="nav-item" data-sec="vendedores" onclick="navTo('vendedores')"><i class="fas fa-users-gear"></i> Time Comercial</button>
-  <button class="nav-item" data-sec="metas" onclick="navTo('metas')"><i class="fas fa-bullseye"></i> Metas</button>
   <button class="nav-item" data-sec="vitrine" onclick="navTo('vitrine')"><i class="fas fa-share-nodes"></i> Compartilhar</button>
   <div class="nav-label">Gestão</div>
   <button class="nav-item" data-sec="reunioes" onclick="navTo('reunioes')"><i class="fas fa-calendar-check"></i> Agendas</button>
@@ -255,6 +256,17 @@
           </div>
         </div>
         <div class="form-grid">
+          <div class="field">
+            <label>Tempo de Preparo</label>
+            <div style="display:flex;gap:0.5rem">
+              <input name="tempo_preparo" type="number" min="0" placeholder="Ex: 30" style="flex:1">
+              <select name="tempo_preparo_unidade" style="width:120px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:0.7rem;color:#fff">
+                <option value="minutos">minutos</option>
+                <option value="horas">horas</option>
+                <option value="dias">dias</option>
+              </select>
+            </div>
+          </div>
           <div class="field full"><label>Descrição</label><textarea name="descricao" placeholder="Descreva o produto..."></textarea></div>
           <div class="field"><label>Imagem do Produto</label><input type="file" name="imagem" accept="image/*"></div>
         </div>
@@ -269,15 +281,19 @@
     <div class="page-title"><i class="fas fa-boxes-stacked"></i> Inventário</div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:1rem;flex-wrap:wrap">
-        <h3 style="margin:0">Produtos Cadastrados</h3>
+        <h3 style="margin:0">Controle de estoque</h3>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+          <button class="btn btn-sm btn-primary" id="btn-inv-produtos" onclick="setInventarioModo('produtos')"><i class="fas fa-box"></i> Produtos</button>
+          <button class="btn btn-sm btn-outline" id="btn-inv-materias" onclick="setInventarioModo('materias')"><i class="fas fa-boxes-stacked"></i> Matéria-prima</button>
+        </div>
       </div>
       <div class="inventory-summary">
         <div class="mini-stat"><div class="mini-label">Itens cadastrados</div><div class="mini-value" id="inv-total">0</div></div>
         <div class="mini-stat"><div class="mini-label">Unidades em estoque</div><div class="mini-value" id="inv-unidades">0</div></div>
-        <div class="mini-stat"><div class="mini-label">Valor de venda</div><div class="mini-value" id="inv-venda" style="color:var(--green)">R$ 0</div></div>
+        <div class="mini-stat"><div class="mini-label" id="inv-valor-label">Valor de venda</div><div class="mini-value" id="inv-venda" style="color:var(--green)">R$ 0</div></div>
         <div class="mini-stat"><div class="mini-label">Alertas</div><div class="mini-value" id="inv-alertas" style="color:var(--amber)">0</div></div>
       </div>
-      <div class="inventory-toolbar">
+      <div class="inventory-toolbar" id="toolbar-produtos">
         <input id="busca-produto" placeholder="Buscar por produto, SKU ou categoria...">
         <select id="filtro-status-produto" onchange="aplicarFiltrosEstoque()">
           <option value="todos">Todos os status</option>
@@ -293,16 +309,29 @@
           <option value="maior_margem">Maior margem</option>
         </select>
       </div>
-      <div class="table-wrap">
+      <div class="inventory-toolbar" id="toolbar-materias" style="display:none">
+        <input id="busca-materia" placeholder="Buscar por matéria-prima, SKU ou unidade...">
+        <select id="filtro-materia" onchange="aplicarFiltrosMateriaPrima()">
+          <option value="todos">Todas</option>
+          <option value="ok">Estoque OK</option>
+          <option value="baixo">Estoque baixo</option>
+          <option value="zerado">Zeradas</option>
+        </select>
+      </div>
+      <div class="table-wrap" id="panel-inv-produtos">
         <table><thead><tr><th>Produto</th><th>Categoria</th><th>Custo</th><th>Venda</th><th>Margem</th><th>Matéria-prima</th><th>Tempos</th><th>Estoque</th><th>Status</th><th>Ações</th></tr></thead>
         <tbody id="tb-estoque"></tbody></table>
+      </div>
+      <div class="table-wrap" id="panel-inv-materias" style="display:none">
+        <table><thead><tr><th>Matéria-prima</th><th>Custo</th><th>Quantidade</th><th>Mínimo</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="tb-materias"></tbody></table>
       </div>
     </div>
   </div>
 
   <!-- MATÉRIA-PRIMA -->
   <div id="sec-materias" class="sec">
-    <div class="page-title"><i class="fas fa-boxes-stacked"></i> Estoque de Matéria-prima</div>
+    <div class="page-title"><i class="fas fa-boxes-stacked"></i> Cadastrar Matéria-prima</div>
     <div class="card">
       <h3>Cadastrar Matéria-prima</h3>
       <form onsubmit="addMateriaPrima(event)">
@@ -319,24 +348,27 @@
       </form>
       <div id="msg-materia" class="msg"></div>
     </div>
+  </div>
+
+  <!-- ENTRADAS -->
+  <div id="sec-entradas" class="sec">
+    <div class="page-title"><i class="fas fa-truck-ramp-box"></i> Entradas de Matéria-prima</div>
     <div class="card">
-      <div class="inventory-summary">
-        <div class="mini-stat"><div class="mini-label">Matérias cadastradas</div><div class="mini-value" id="mp-total">0</div></div>
-        <div class="mini-stat"><div class="mini-label">Quantidade total</div><div class="mini-value" id="mp-qtd">0</div></div>
-        <div class="mini-stat"><div class="mini-label">Alertas</div><div class="mini-value" id="mp-alertas" style="color:var(--amber)">0</div></div>
-      </div>
-      <div class="inventory-toolbar">
-        <input id="busca-materia" placeholder="Buscar por matéria-prima ou produto...">
-        <select id="filtro-materia" onchange="aplicarFiltrosMateriaPrima()">
-          <option value="todos">Todas</option>
-          <option value="ok">Estoque OK</option>
-          <option value="baixo">Estoque baixo</option>
-          <option value="zerado">Zeradas</option>
-        </select>
-      </div>
+      <h3>Registrar chegada</h3>
+      <form onsubmit="registrarEntradaMateria(event)">
+        <div class="form-grid">
+          <div class="field"><label>Matéria-prima *</label><select id="entrada-materia-id" name="materia_id" required><option value="">Carregando...</option></select></div>
+          <div class="field"><label>Quantidade *</label><input name="quantidade" type="number" step="0.001" min="0.001" required placeholder="Ex: 10"></div>
+          <div class="field full"><label>Observação</label><input name="observacoes" placeholder="Ex: Compra do dia, fornecedor, lote, embalagem..."></div>
+        </div>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Registrar Entrada</button>
+      </form>
+      <div id="msg-entrada" class="msg"></div>
+    </div>
+    <div class="card">
+      <h3>Matérias-primas disponíveis</h3>
       <div class="table-wrap">
-        <table><thead><tr><th>Matéria-prima</th><th>Custo</th><th>Quantidade</th><th>Mínimo</th><th>Status</th><th>Ações</th></tr></thead>
-        <tbody id="tb-materias"></tbody></table>
+        <table><thead><tr><th>Matéria-prima</th><th>Quantidade atual</th><th>Mínimo</th><th>Status</th></tr></thead><tbody id="tb-entradas-materias"></tbody></table>
       </div>
     </div>
   </div>
@@ -571,6 +603,7 @@ var todosProds=[];
 var materiasCache=[];
 var composicaoProduto=[];
 var ajusteAtual=null;
+var inventarioModo='produtos';
 
 // ── NAVEGAÇÃO ──────────────────────────────────────────────────
 function navTo(sec) {
@@ -579,7 +612,7 @@ function navTo(sec) {
   const el = document.getElementById('sec-' + sec);
   if (el) el.classList.add('active');
   document.querySelectorAll(`.nav-item[data-sec="${sec}"]`).forEach(n => n.classList.add('active'));
-  const loaders = {dashboard:loadDashboard,notificacoes:loadPainelNotificacoes,produtos:loadCadastroProduto,estoque:loadEstoque,materias:loadMateriaPrima,categorias:loadCategorias,pedidos:loadPedidos,vendedores:loadVendedores,reunioes:loadReunioes,contatos:loadContatos,historico:loadHistorico,metas:loadMetas,vitrine:loadVitrine};
+  const loaders = {dashboard:loadDashboard,notificacoes:loadPainelNotificacoes,produtos:loadCadastroProduto,estoque:loadEstoque,materias:loadCadastroMateriaPrima,entradas:loadEntradas,categorias:loadCategorias,pedidos:loadPedidos,vendedores:loadVendedores,reunioes:loadReunioes,contatos:loadContatos,historico:loadHistorico,metas:loadMetas,vitrine:loadVitrine};
   if (loaders[sec]) loaders[sec]();
 }
 
@@ -886,16 +919,33 @@ async function verificarReunioes(){
 async function loadCadastroProduto(){
   await Promise.all([loadCategoriasSelect(), loadMateriasSelect()]);
 }
+async function loadCadastroMateriaPrima(){
+  await loadMateriasSelect();
+}
 async function loadEstoque(){
   try{
-    todosProds=await api('/api/estoque/produtos');
+    const [prods,materias]=await Promise.all([api('/api/estoque/produtos'),api('/api/estoque/materias-primas')]);
+    todosProds=Array.isArray(prods)?prods:[];
+    materiasCache=Array.isArray(materias)?materias:[];
     aplicarFiltrosEstoque();
+    aplicarFiltrosMateriaPrima();
+    if(inventarioModo==='produtos')aplicarFiltrosEstoque();
     await loadCategoriasSelect();
   }catch(e){
     console.error(e);
     const tb=document.getElementById('tb-estoque');
     if(tb)tb.innerHTML=`<tr><td colspan="10" style="text-align:center;color:var(--red);padding:2rem">${escapeHtml(e.message)}</td></tr>`;
   }
+}
+function setInventarioModo(modo){
+  inventarioModo=modo;
+  document.getElementById('panel-inv-produtos').style.display=modo==='produtos'?'block':'none';
+  document.getElementById('panel-inv-materias').style.display=modo==='materias'?'block':'none';
+  document.getElementById('toolbar-produtos').style.display=modo==='produtos'?'flex':'none';
+  document.getElementById('toolbar-materias').style.display=modo==='materias'?'flex':'none';
+  document.getElementById('btn-inv-produtos').className='btn btn-sm '+(modo==='produtos'?'btn-primary':'btn-outline');
+  document.getElementById('btn-inv-materias').className='btn btn-sm '+(modo==='materias'?'btn-primary':'btn-outline');
+  if(modo==='produtos')aplicarFiltrosEstoque();else aplicarFiltrosMateriaPrima();
 }
 function statusProduto(p){
   const q=Number(p.quantidade||0),m=Number(p.minimo||0);
@@ -920,9 +970,21 @@ function renderResumoEstoque(prods){
   const unidades=prods.reduce((s,p)=>s+Number(p.quantidade||0),0);
   const valorVenda=prods.reduce((s,p)=>s+Number(p.preco||0)*Number(p.quantidade||0),0);
   const alertas=prods.filter(p=>statusProduto(p)!=='ok').length;
+  document.getElementById('inv-valor-label').textContent='Valor de venda';
   document.getElementById('inv-total').textContent=total;
   document.getElementById('inv-unidades').textContent=unidades;
   document.getElementById('inv-venda').textContent=fmt(valorVenda);
+  document.getElementById('inv-alertas').textContent=alertas;
+}
+function renderResumoMaterias(materias){
+  const total=materias.length;
+  const quantidadeTotal=materias.reduce((s,m)=>s+Number(m.quantidade||0),0);
+  const valorCusto=materias.reduce((s,m)=>s+Number(m.custo_unitario||0)*Number(m.quantidade||0),0);
+  const alertas=materias.filter(m=>m.status!=='ok').length;
+  document.getElementById('inv-valor-label').textContent='Valor de custo';
+  document.getElementById('inv-total').textContent=total;
+  document.getElementById('inv-unidades').textContent=quantidadeTotal.toLocaleString('pt-BR');
+  document.getElementById('inv-venda').textContent=fmt(valorCusto);
   document.getElementById('inv-alertas').textContent=alertas;
 }
 function aplicarFiltrosEstoque(){
@@ -967,12 +1029,7 @@ function aplicarFiltrosMateriaPrima(){
   renderMateriaPrima(materias);
 }
 function renderMateriaPrima(materias){
-  const total=materias.length;
-  const quantidadeTotal=materias.reduce((s,m)=>s+Number(m.quantidade||0),0);
-  const alertas=materias.filter(m=>m.status!=='ok').length;
-  document.getElementById('mp-total').textContent=total;
-  document.getElementById('mp-qtd').textContent=quantidadeTotal.toLocaleString('pt-BR');
-  document.getElementById('mp-alertas').textContent=alertas;
+  renderResumoMaterias(materias);
   const tb=document.getElementById('tb-materias');
   tb.innerHTML=materias.length?materias.map(m=>{
     const cls=m.status==='zerado'?'badge-zero':m.status==='baixo'?'badge-low':'badge-ok';
@@ -1005,6 +1062,7 @@ function renderEstoque(prods){
       ? materias.map(m=>`<div><b>${escapeHtml(m.nome||'Matéria-prima')}</b><span class="stock-pill">${Number(m.quantidade_por_produto||0).toLocaleString('pt-BR')} ${escapeHtml(m.unidade||'un')} por produto</span></div>`).join('')
       : '-';
     const tempos=[
+      p.tempo_preparo?`⏱ Prep: ${p.tempo_preparo} ${p.tempo_preparo_unidade||'minutos'}`:'',
       p.tempo_entrega?`🚚 Entr: ${p.tempo_entrega} ${p.tempo_entrega_unidade||'min'}`:''
     ].filter(Boolean).join('<br>');
     return `<tr>
@@ -1102,7 +1160,6 @@ async function addMateriaPrima(e){
   try{
     await api('/api/materias-primas',{method:'POST',body:JSON.stringify(data)});
     f.reset();
-    f.unidade.value='kg';
     setMsg('msg-materia','✅ Matéria-prima cadastrada!',true);
     await loadMateriaPrima();
     await loadMateriasSelect();
@@ -1114,11 +1171,51 @@ async function loadMateriasSelect(){
   try{
     materiasCache=await api('/api/estoque/materias-primas');
     const sel=document.getElementById('sel-materia-prod');
-    if(!sel)return;
-    sel.innerHTML=materiasCache.length
+    const opts=materiasCache.length
       ? '<option value="">Selecione...</option>'+materiasCache.map(m=>`<option value="${m.id}" data-nome="${escapeHtml(m.nome)}" data-unidade="${escapeHtml(m.unidade||'un')}">${escapeHtml(m.nome)} (${Number(m.quantidade||0)} ${escapeHtml(m.unidade||'un')})</option>`).join('')
       : '<option value="">Cadastre uma matéria-prima primeiro</option>';
+    if(sel)sel.innerHTML=opts;
+    const entradaSel=document.getElementById('entrada-materia-id');
+    if(entradaSel)entradaSel.innerHTML=opts;
   }catch(e){console.error(e);}
+}
+
+async function loadEntradas(){
+  await loadMateriasSelect();
+  renderEntradasMaterias();
+}
+
+function renderEntradasMaterias(){
+  const tb=document.getElementById('tb-entradas-materias');
+  if(!tb)return;
+  const materias=materiasCache.map(materiaPrimaProduto).filter(Boolean);
+  tb.innerHTML=materias.length?materias.map(m=>{
+    const cls=m.status==='zerado'?'badge-zero':m.status==='baixo'?'badge-low':'badge-ok';
+    const txt=m.status==='zerado'?'Zerado':m.status==='baixo'?'Baixo':'OK';
+    return `<tr>
+      <td><b>${escapeHtml(m.nome)}</b><span class="stock-pill">${escapeHtml(m.unidade||'un')}</span></td>
+      <td><b>${m.quantidade.toLocaleString('pt-BR')}</b> ${escapeHtml(m.unidade||'un')}</td>
+      <td>${m.minimo.toLocaleString('pt-BR')} ${escapeHtml(m.unidade||'un')}</td>
+      <td><span class="badge ${cls}">${txt}</span></td>
+    </tr>`;
+  }).join(''):'<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:2rem">Nenhuma matéria-prima cadastrada</td></tr>';
+}
+
+async function registrarEntradaMateria(e){
+  e.preventDefault();
+  const fd=new FormData(e.target);
+  const id=fd.get('materia_id');
+  const quantidade=Number(fd.get('quantidade')||0);
+  const observacoes=(fd.get('observacoes')||'Entrada de matéria-prima').trim();
+  if(!id||quantidade<=0){setMsg('msg-entrada','❌ Informe matéria-prima e quantidade',false);return;}
+  try{
+    await api(`/api/materias-primas/${id}/entrada`,{method:'POST',body:JSON.stringify({quantidade,observacoes})});
+    setMsg('msg-entrada','✅ Entrada registrada!',true);
+    e.target.reset();
+    await loadEntradas();
+    await loadEstoque();
+    await loadHistorico();
+  }catch(ex){setMsg('msg-entrada','❌ '+ex.message,false);}
 }
 
 function addMateriaAoProduto(){
@@ -1181,7 +1278,7 @@ async function delMateriaPrima(id,nome){
 }
 // ── CATEGORIAS ─────────────────────────────────────────────────
 async function loadCategorias(){
-  try{const c=await api('/api/categorias');const tb=document.getElementById('tb-categorias');tb.innerHTML=c.length?c.map(c=>`<tr><td>${c.id}</td><td>${c.nome}</td><td><button class="btn btn-sm btn-danger" onclick="delCat(${c.id},'${c.nome}')"><i class="fas fa-trash"></i></button></td></tr>`).join(''):'<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:2rem">Nenhuma</td></tr>';}catch(e){}
+  try{const c=(await api('/api/categorias')).sort((a,b)=>Number(a.id||0)-Number(b.id||0));const tb=document.getElementById('tb-categorias');tb.innerHTML=c.length?c.map(c=>`<tr><td>${c.id}</td><td>${c.nome}</td><td><button class="btn btn-sm btn-danger" onclick="delCat(${c.id},'${c.nome}')"><i class="fas fa-trash"></i></button></td></tr>`).join(''):'<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:2rem">Nenhuma</td></tr>';}catch(e){}
 }
 async function loadCategoriasSelect(){
   try{const c=await api('/api/categorias');const s=document.getElementById('sel-cat-prod');s.innerHTML='<option value="">Selecione...</option>'+c.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');}catch(e){}
@@ -1201,6 +1298,8 @@ let itensPedido=[];
 async function loadPedidos(){
   try{
     const [pedidos,prods,vends]=await Promise.all([api('/api/pedidos'),api('/api/produtos'),api('/api/vendedores')]);
+    const dataPedido=document.querySelector('input[name="data_pedido"]');
+    if(dataPedido&&!dataPedido.value)dataPedido.value=new Date().toISOString().slice(0,10);
     const selP=document.getElementById('sel-prod-pedido');
     selP.innerHTML=prods.map(p=>`<option value="${p.id}" data-preco="${p.preco}" data-stock="${p.quantidade||0}" ${Number(p.quantidade||0)<=0?'disabled':''}>${p.nome} (${p.quantidade} un.) — ${fmt(p.preco)}</option>`).join('');
     const selV=document.getElementById('sel-vend-pedido');

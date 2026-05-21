@@ -134,6 +134,7 @@ MATERIA_PRIMA_MARKER = '[DADOS_MATERIA_PRIMA] '
 MATERIAS_PRODUTO_MARKER = '[MATERIAS_PRIMAS_PRODUTO] '
 TIPO_ITEM_MARKER = '[TIPO_ITEM] '
 MATERIA_ESTOQUE_MARKER = '[ESTOQUE_MATERIA_PRIMA] '
+TEMPO_PRODUTO_MARKER = '[TEMPO_PRODUTO] '
 
 
 def _to_float_safe(val):
@@ -180,7 +181,7 @@ def anexar_materia_prima_descricao(descricao, materia_prima):
 def limpar_marcadores_descricao(descricao):
     linhas = []
     for linha in (descricao or '').splitlines():
-        if linha.startswith((MATERIA_PRIMA_MARKER, MATERIAS_PRODUTO_MARKER, TIPO_ITEM_MARKER, MATERIA_ESTOQUE_MARKER)):
+        if linha.startswith((MATERIA_PRIMA_MARKER, MATERIAS_PRODUTO_MARKER, TIPO_ITEM_MARKER, MATERIA_ESTOQUE_MARKER, TEMPO_PRODUTO_MARKER)):
             continue
         linhas.append(linha)
     return '\n'.join(linhas).strip()
@@ -219,6 +220,25 @@ def anexar_materias_produto_descricao(descricao, materias):
         return descricao
     payload = json.dumps(materias, ensure_ascii=False, separators=(',', ':'))
     return f"{descricao}\n\n{MATERIAS_PRODUTO_MARKER}{payload}".strip()
+
+
+def extrair_tempo_produto(data):
+    tempo_preparo = _to_int_safe(data.get('tempo_preparo', 0))
+    unidade = (data.get('tempo_preparo_unidade') or 'minutos').strip() or 'minutos'
+    if tempo_preparo <= 0:
+        return None
+    return {
+        'tempo_preparo': tempo_preparo,
+        'tempo_preparo_unidade': unidade,
+    }
+
+
+def anexar_tempo_produto_descricao(descricao, tempo):
+    descricao = limpar_marcadores_descricao(descricao)
+    if not tempo:
+        return descricao
+    payload = json.dumps(tempo, ensure_ascii=False, separators=(',', ':'))
+    return f"{descricao}\n\n{TEMPO_PRODUTO_MARKER}{payload}".strip()
 
 
 # ═══════════════════════════════════════════
@@ -564,6 +584,7 @@ def api_criar_produto():
 
     materias_produto = extrair_materias_produto(data)
     descricao = anexar_materias_produto_descricao(data.get('descricao', ''), materias_produto)
+    descricao = anexar_tempo_produto_descricao(descricao, extrair_tempo_produto(data))
 
     dados_produto = {
         'nome': (data.get('nome') or '').strip(),
@@ -784,6 +805,7 @@ def api_criar_produto_v2():
     # Preparar dados do produto
     materias_produto = extrair_materias_produto(data)
     descricao = anexar_materias_produto_descricao(data.get('descricao', ''), materias_produto)
+    descricao = anexar_tempo_produto_descricao(descricao, extrair_tempo_produto(data))
     dados_produto = {
         'nome': data.get('nome', ''),
         'sku': data.get('sku', ''),
