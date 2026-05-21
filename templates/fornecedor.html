@@ -808,7 +808,15 @@ async function loadCadastroProduto(){
   await Promise.all([loadCategoriasSelect(), loadMateriasSelect()]);
 }
 async function loadEstoque(){
-  try{todosProds=await api('/api/produtos');aplicarFiltrosEstoque();await loadCategoriasSelect();}catch(e){console.error(e);}
+  try{
+    todosProds=await api('/api/estoque/produtos');
+    aplicarFiltrosEstoque();
+    await loadCategoriasSelect();
+  }catch(e){
+    console.error(e);
+    const tb=document.getElementById('tb-estoque');
+    if(tb)tb.innerHTML=`<tr><td colspan="10" style="text-align:center;color:var(--red);padding:2rem">${escapeHtml(e.message)}</td></tr>`;
+  }
 }
 function statusProduto(p){
   const q=Number(p.quantidade||0),m=Number(p.minimo||0);
@@ -858,10 +866,14 @@ function aplicarFiltrosEstoque(){
 }
 async function loadMateriaPrima(){
   try{
-    materiasCache=await api('/api/materias-primas');
+    materiasCache=await api('/api/estoque/materias-primas');
     aplicarFiltrosMateriaPrima();
     loadMateriasSelect();
-  }catch(e){console.error(e);}
+  }catch(e){
+    console.error(e);
+    const tb=document.getElementById('tb-materias');
+    if(tb)tb.innerHTML=`<tr><td colspan="6" style="text-align:center;color:var(--red);padding:2rem">${escapeHtml(e.message)}</td></tr>`;
+  }
 }
 function aplicarFiltrosMateriaPrima(){
   const termo=(document.getElementById('busca-materia')?.value||'').toLowerCase().trim();
@@ -1023,7 +1035,7 @@ async function addMateriaPrima(e){
 
 async function loadMateriasSelect(){
   try{
-    materiasCache=await api('/api/materias-primas');
+    materiasCache=await api('/api/estoque/materias-primas');
     const sel=document.getElementById('sel-materia-prod');
     if(!sel)return;
     sel.innerHTML=materiasCache.length

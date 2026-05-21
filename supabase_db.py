@@ -352,29 +352,8 @@ def obter_produto(empresa_id, produto_id):
 
 def obter_materias_primas(empresa_id):
     try:
-        materias = []
-        try:
-            res = supabase.table('materias_primas').select('*').eq('empresa_id', empresa_id).order('nome').execute()
-            materias.extend(_normalizar_materia_prima_tabela(p) for p in (res.data or []))
-        except Exception as e:
-            print(f"Aviso: tabela materias_primas indisponível, usando fallback em produtos: {e}")
-
-        try:
-            res = supabase.table('produtos').select('*').eq('empresa_id', empresa_id).order('nome').execute()
-            itens = [_normalizar_materia_prima(p) for p in (res.data or [])]
-            materias.extend(p for p in itens if p.get('tipo_item') == 'materia_prima')
-        except Exception as e:
-            print(f"Aviso: fallback de matérias-primas em produtos indisponível: {e}")
-
-        vistos = set()
-        unicas = []
-        for item in materias:
-            chave = (item.get('tipo_item'), item.get('id'), item.get('nome'))
-            if chave in vistos:
-                continue
-            vistos.add(chave)
-            unicas.append(item)
-        return unicas
+        res = supabase.table('materias_primas').select('*').eq('empresa_id', empresa_id).order('nome').execute()
+        return [_normalizar_materia_prima_tabela(p) for p in (res.data or [])]
     except Exception as e:
         print(f"Erro em obter_materias_primas: {e}")
         return []
@@ -397,79 +376,35 @@ def criar_materia_prima(empresa_id, nome, unidade='un', quantidade=0, minimo=0, 
             "custo_unitario": float(custo_unitario or 0),
             "descricao": (descricao or '').strip(),
         }
-        try:
-            res = supabase.table('materias_primas').insert(data).execute()
-        except Exception:
-            data = {
-                "empresa_id": empresa_id,
-                "nome": nome.strip(),
-                "sku": (sku or '').strip() or None,
-                "categoria_id": None,
-                "custo": float(custo_unitario or 0),
-                "preco": 0,
-                "quantidade": int(float(quantidade or 0)),
-                "minimo": int(float(minimo or 0)),
-                "descricao": montar_descricao_materia_prima(descricao, unidade, custo_unitario),
-                "imagem": None
-            }
-            res = supabase.table('produtos').insert(data).execute()
+        res = supabase.table('materias_primas').insert(data).execute()
         if not res.data:
             return {'sucesso': False, 'mensagem': 'Erro ao inserir matéria-prima no banco.'}
 
         pid = res.data[0]['id']
-        try:
-            supabase.table('historico').insert({
-                "empresa_id": empresa_id, "produto_id": pid, "tipo": 'entrada',
-                "quantidade": int(float(quantidade or 0)), "observacoes": 'Cadastro inicial de matéria-prima'
-            }).execute()
-        except:
-            registrar_historico_materia_prima(
-                empresa_id, pid, 'entrada', quantidade, 'Cadastro inicial de matéria-prima'
-            )
-        return {'sucesso': True, 'id': pid, 'materia_prima': _normalizar_materia_prima_tabela(res.data[0]) if 'unidade' in res.data[0] else _normalizar_materia_prima(res.data[0])}
+        registrar_historico_materia_prima(
+            empresa_id, pid, 'entrada', quantidade, 'Cadastro inicial de matéria-prima'
+        )
+        return {'sucesso': True, 'id': pid, 'materia_prima': _normalizar_materia_prima_tabela(res.data[0])}
     except Exception as e:
         return {'sucesso': False, 'mensagem': f'Erro no Banco: {str(e)}'}
 
 
 def atualizar_materia_prima(empresa_id, materia_id, dados):
     try:
-        try:
-            atual = supabase.table('materias_primas').select('*').eq('id', materia_id).eq('empresa_id', empresa_id).execute()
-            if not atual.data:
-                return {'sucesso': False, 'mensagem': 'Matéria-prima não encontrada'}
-            atual_norm = _normalizar_materia_prima_tabela(atual.data[0])
-            update_data = {
-                'nome': (dados.get('nome', atual_norm.get('nome')) or '').strip(),
-                'sku': (dados.get('sku', atual_norm.get('sku')) or '').strip() or None,
-                'unidade': (dados.get('unidade', atual_norm.get('unidade')) or 'un').strip(),
-                'custo_unitario': float(dados.get('custo_unitario', atual_norm.get('custo_unitario', 0)) or 0),
-                'quantidade': int(float(dados.get('quantidade', atual_norm.get('quantidade', 0)) or 0)),
-                'minimo': int(float(dados.get('minimo', atual_norm.get('minimo', 0)) or 0)),
-                'descricao': dados.get('descricao', atual_norm.get('descricao', '')),
-            }
-            supabase.table('materias_primas').update(update_data).eq('id', materia_id).eq('empresa_id', empresa_id).execute()
-            return {'sucesso': True}
-        except Exception:
-            pass
-
-        atual = supabase.table('produtos').select('*').eq('id', materia_id).eq('empresa_id', empresa_id).execute()
+        atual = supabase.table('materias_primas').select('*').eq('id', materia_id).eq('empresa_id', empresa_id).execute()
         if not atual.data:
             return {'sucesso': False, 'mensagem': 'Matéria-prima não encontrada'}
-        atual_norm = _normalizar_materia_prima(atual.data[0])
-
-        unidade = dados.get('unidade', atual_norm.get('unidade', 'un'))
-        custo_unitario = dados.get('custo_unitario', atual_norm.get('custo_unitario', atual_norm.get('custo', 0)))
-        descricao = dados.get('descricao', atual_norm.get('descricao', ''))
+        atual_norm = _normalizar_materia_prima_tabela(atual.data[0])
         update_data = {
             'nome': (dados.get('nome', atual_norm.get('nome')) or '').strip(),
             'sku': (dados.get('sku', atual_norm.get('sku')) or '').strip() or None,
-            'custo': float(custo_unitario or 0),
-            'preco': 0,
+            'unidade': (dados.get('unidade', atual_norm.get('unidade')) or 'un').strip(),
+            'custo_unitario': float(dados.get('custo_unitario', atual_norm.get('custo_unitario', 0)) or 0),
             'quantidade': int(float(dados.get('quantidade', atual_norm.get('quantidade', 0)) or 0)),
             'minimo': int(float(dados.get('minimo', atual_norm.get('minimo', 0)) or 0)),
-            'descricao': montar_descricao_materia_prima(descricao, unidade, custo_unitario),
+            'descricao': dados.get('descricao', atual_norm.get('descricao', '')),
         }
-        supabase.table('produtos').update(update_data).eq('id', materia_id).eq('empresa_id', empresa_id).execute()
+        supabase.table('materias_primas').update(update_data).eq('id', materia_id).eq('empresa_id', empresa_id).execute()
         return {'sucesso': True}
     except Exception as e:
         return {'sucesso': False, 'mensagem': str(e)}
@@ -484,8 +419,8 @@ def adicionar_estoque_materia_prima(empresa_id, materia_id, quantidade, observac
         supabase.table('materias_primas').update({'quantidade': nova_qtd}).eq('id', materia_id).eq('empresa_id', empresa_id).execute()
         registrar_historico_materia_prima(empresa_id, materia_id, 'entrada', quantidade, observacoes or 'Entrada de matéria-prima')
         return {'sucesso': True, 'nova_quantidade': nova_qtd}
-    except Exception:
-        return adicionar_estoque(empresa_id, materia_id, quantidade, observacoes or 'Entrada de matéria-prima')
+    except Exception as e:
+        return {'sucesso': False, 'mensagem': str(e)}
 
 
 def retirar_estoque_materia_prima(empresa_id, materia_id, quantidade, observacoes=''):
@@ -500,17 +435,21 @@ def retirar_estoque_materia_prima(empresa_id, materia_id, quantidade, observacoe
         supabase.table('materias_primas').update({'quantidade': nova_qtd}).eq('id', materia_id).eq('empresa_id', empresa_id).execute()
         registrar_historico_materia_prima(empresa_id, materia_id, 'saida', quantidade, observacoes or 'Saída de matéria-prima')
         return {'sucesso': True, 'nova_quantidade': nova_qtd}
-    except Exception:
-        return retirar_estoque(empresa_id, materia_id, quantidade, observacoes or 'Saída de matéria-prima')
+    except Exception as e:
+        return {'sucesso': False, 'mensagem': str(e)}
 
 
 def deletar_materia_prima(empresa_id, materia_id):
     try:
         supabase.table('produto_materias_primas').delete().eq('materia_prima_id', materia_id).eq('empresa_id', empresa_id).execute()
+        try:
+            supabase.table('historico_materias_primas').delete().eq('materia_prima_id', materia_id).eq('empresa_id', empresa_id).execute()
+        except:
+            pass
         supabase.table('materias_primas').delete().eq('id', materia_id).eq('empresa_id', empresa_id).execute()
         return {'sucesso': True}
-    except Exception:
-        return deletar_produto(empresa_id, materia_id)
+    except Exception as e:
+        return {'sucesso': False, 'mensagem': str(e)}
 
 
 def salvar_composicao_produto(empresa_id, produto_id, materias):
