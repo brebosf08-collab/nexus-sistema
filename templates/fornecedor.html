@@ -633,15 +633,16 @@ async function api(url, opts={}) {
 }
 const SUPABASE_URL = 'https://gtctfqphvsczeenpysco.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_i7zHWTjev6I-vdCTbBgG7Q_p3qSDvti';
-const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabaseClient = window.supabase?.createClient ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 let supabaseStockChannel = null;
 
 function unsubscribeEstoqueFornecedor(){
-  if(!supabaseStockChannel) return;
+  if(!supabaseClient||!supabaseStockChannel) return;
   supabaseClient.removeChannel(supabaseStockChannel);
   supabaseStockChannel = null;
 }
 function subscribeEstoqueFornecedor(){
+  if(!supabaseClient) return;
   unsubscribeEstoqueFornecedor();
   supabaseStockChannel = supabaseClient.channel(`realtime-estoque-{{ empresa.id }}`)
     .on('postgres_changes', { event:'*', schema:'public', table:'produtos', filter:`empresa_id=eq.{{ empresa.id }}` }, payload => {
@@ -877,6 +878,10 @@ async function marcarTodosAvisosLidos(){
 
 async function loadGrafico(periodo){
   ['dia','semana','mes'].forEach(p=>{const b=document.getElementById('btn-'+p);if(b)b.className='btn btn-sm '+(p===periodo?'btn-primary':'btn-outline');});
+  if(typeof Chart==='undefined'){
+    console.warn('Chart.js indisponível');
+    return;
+  }
   try{
     const pedidos=await api('/api/pedidos');
     const pedidosArray=Array.isArray(pedidos)?pedidos:[];
@@ -896,7 +901,9 @@ async function loadGrafico(periodo){
       pedidosArray.forEach(p=>{const d=new Date(p.criado_em||p.data);const diff=Math.round((hoje-d)/86400000);if(diff>=0&&diff<30)data[29-diff]+=Number(p.total||0);});
     }
     if(chartInst)chartInst.destroy();
-    const ctx=document.getElementById('chart-lucro').getContext('2d');
+    const canvas=document.getElementById('chart-lucro');
+    if(!canvas)return;
+    const ctx=canvas.getContext('2d');
     chartInst=new Chart(ctx,{type:'bar',data:{labels,datasets:[{label:'Vendas (R$)',data,backgroundColor:'rgba(99,102,241,0.5)',borderColor:'#6366f1',borderWidth:2,borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#808090',font:{size:11}},grid:{color:'rgba(255,255,255,0.03)'}},y:{ticks:{color:'#808090',font:{size:11},callback:v=>'R$'+v},grid:{color:'rgba(255,255,255,0.05)'}}}}});
   }catch(e){console.error('Erro no gráfico fornecedor:',e);}
 }
