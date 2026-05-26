@@ -125,6 +125,7 @@
   <button class="nav-item" data-sec="categorias" onclick="navTo('categorias')"><i class="fas fa-tags"></i> Categorias</button>
   <div class="nav-label">Estoque</div>
   <button class="nav-item" data-sec="estoque" onclick="navTo('estoque')"><i class="fas fa-box"></i> Inventário</button>
+  <button class="nav-item" data-sec="ia-producao" onclick="navTo('ia-producao')"><i class="fas fa-wand-magic-sparkles"></i> IA Produção</button>
   <div class="nav-label">Comercial</div>
   <button class="nav-item" data-sec="pedidos" onclick="navTo('pedidos')"><i class="fas fa-file-invoice-dollar"></i> Pedidos</button>
   <button class="nav-item" data-sec="vendedores" onclick="navTo('vendedores')"><i class="fas fa-users-gear"></i> Time Comercial</button>
@@ -326,11 +327,11 @@
         </select>
       </div>
       <div class="table-wrap" id="panel-inv-produtos">
-        <table><thead><tr><th>Produto</th><th>Categoria</th><th>Custo</th><th>Venda</th><th>Margem</th><th>Matéria-prima</th><th>Tempos</th><th>Estoque</th><th>Status</th><th>Ações</th></tr></thead>
+        <table><thead><tr><th>Produto</th><th>Categoria</th><th>Custo</th><th>Venda</th><th>Margem</th><th>Matéria-prima</th><th>Observações</th><th>Tempos</th><th>Estoque</th><th>Status</th><th>Ações</th></tr></thead>
         <tbody id="tb-estoque"></tbody></table>
       </div>
       <div class="table-wrap" id="panel-inv-materias" style="display:none">
-        <table><thead><tr><th>Matéria-prima</th><th>Custo</th><th>Quantidade</th><th>Mínimo</th><th>Status</th><th>Ações</th></tr></thead>
+        <table><thead><tr><th>Matéria-prima</th><th>Custo</th><th>Quantidade</th><th>Mínimo</th><th>Observações</th><th>Status</th><th>Ações</th></tr></thead>
         <tbody id="tb-materias"></tbody></table>
       </div>
     </div>
@@ -395,11 +396,11 @@
     </div>
   </div>
 
-  <!-- PEDIDOS -->
-  <div id="sec-pedidos" class="sec">
-    <div class="page-title"><i class="fas fa-file-invoice-dollar"></i> Gestão de Pedidos</div>
+  <!-- IA PRODUÇÃO -->
+  <div id="sec-ia-producao" class="sec">
+    <div class="page-title"><i class="fas fa-wand-magic-sparkles"></i> IA de Produção</div>
     <div class="card">
-      <h3><i class="fas fa-wand-magic-sparkles" style="color:var(--accent)"></i> IA de matéria-prima</h3>
+      <h3>Calcular matéria-prima para produção</h3>
       <div class="form-grid" style="margin-bottom:1rem">
         <div class="field"><label>Produto</label><select id="ia-produto"><option value="">Carregando produtos...</option></select></div>
         <div class="field"><label>Quantidade a produzir</label><input id="ia-quantidade" type="number" step="1" min="1" placeholder="Ex: 50"></div>
@@ -407,6 +408,11 @@
       <button type="button" class="btn btn-primary" onclick="calcularMateriaPrimaIA()"><i class="fas fa-calculator"></i> Calcular Matéria-prima</button>
       <div id="ia-resultado" style="margin-top:1rem"></div>
     </div>
+  </div>
+
+  <!-- PEDIDOS -->
+  <div id="sec-pedidos" class="sec">
+    <div class="page-title"><i class="fas fa-file-invoice-dollar"></i> Gestão de Pedidos</div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1rem">
         <h3 style="margin:0"><i class="fas fa-clipboard-check" style="color:var(--accent)"></i> Análise de Pedidos</h3>
@@ -635,7 +641,7 @@ function navTo(sec) {
   const el = document.getElementById('sec-' + sec);
   if (el) el.classList.add('active');
   document.querySelectorAll(`.nav-item[data-sec="${sec}"]`).forEach(n => n.classList.add('active'));
-  const loaders = {dashboard:loadDashboard,notificacoes:loadPainelNotificacoes,produtos:loadCadastroProduto,estoque:loadEstoque,materias:loadCadastroMateriaPrima,entradas:loadEntradas,categorias:loadCategorias,pedidos:loadPedidos,vendedores:loadVendedores,reunioes:loadReunioes,contatos:loadContatos,historico:loadHistorico,metas:loadMetas,vitrine:loadVitrine};
+  const loaders = {dashboard:loadDashboard,notificacoes:loadPainelNotificacoes,produtos:loadCadastroProduto,estoque:loadEstoque,'ia-producao':loadIAProducao,materias:loadCadastroMateriaPrima,entradas:loadEntradas,categorias:loadCategorias,pedidos:loadPedidos,vendedores:loadVendedores,reunioes:loadReunioes,contatos:loadContatos,historico:loadHistorico,metas:loadMetas,vitrine:loadVitrine};
   if (loaders[sec]) loaders[sec]();
 }
 
@@ -986,7 +992,7 @@ function materiaPrimaProduto(p){
   const minimo=Number(p.minimo||0);
   const unidade=p.unidade||'un';
   const status=quantidade<=0?'zerado':quantidade<=minimo?'baixo':'ok';
-  return {id:p.id,nome,sku:p.sku||'',quantidade,minimo,unidade,status,custo_unitario:Number(p.custo_unitario||p.custo||0)};
+  return {id:p.id,nome,sku:p.sku||'',quantidade,minimo,unidade,status,custo_unitario:Number(p.custo_unitario||p.custo||0),descricao:p.descricao||''};
 }
 function renderResumoEstoque(prods){
   const total=prods.length;
@@ -1039,6 +1045,13 @@ async function loadMateriaPrima(){
     if(tb)tb.innerHTML=`<tr><td colspan="6" style="text-align:center;color:var(--red);padding:2rem">${escapeHtml(e.message)}</td></tr>`;
   }
 }
+async function loadIAProducao(){
+  try{
+    const prods=await api('/api/produtos');
+    const iaSel=document.getElementById('ia-produto');
+    if(iaSel)iaSel.innerHTML='<option value="">Selecione...</option>'+prods.map(p=>`<option value="${p.id}">${escapeHtml(p.nome)} (${p.quantidade||0} un.)</option>`).join('');
+  }catch(e){console.error(e);}
+}
 function aplicarFiltrosMateriaPrima(){
   const termo=(document.getElementById('busca-materia')?.value||'').toLowerCase().trim();
   const filtro=document.getElementById('filtro-materia')?.value||'todos';
@@ -1062,6 +1075,7 @@ function renderMateriaPrima(materias){
       <td>${fmt(m.custo_unitario)} / ${escapeHtml(m.unidade)}</td>
       <td><b>${m.quantidade.toLocaleString('pt-BR')}</b> ${escapeHtml(m.unidade)}</td>
       <td>${m.minimo.toLocaleString('pt-BR')} ${escapeHtml(m.unidade)}</td>
+      <td style="max-width:260px;color:var(--muted);font-size:0.8rem">${m.descricao?escapeHtml(m.descricao):'-'}</td>
       <td><span class="badge ${cls}">${txt}</span></td>
       <td style="display:flex;gap:0.4rem;flex-wrap:wrap">
         <button class="btn btn-sm btn-success" onclick="ajustarMateriaPrima(${m.id},'entrada')" title="Entrada"><i class="fas fa-plus"></i></button>
@@ -1069,7 +1083,7 @@ function renderMateriaPrima(materias){
         <button class="btn btn-sm btn-danger" onclick="delMateriaPrima(${m.id},'${String(m.nome||'').replace(/'/g,"\\'")}')" title="Excluir"><i class="fas fa-trash"></i></button>
       </td>
     </tr>`;
-  }).join(''):'<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:2rem">Nenhuma matéria-prima cadastrada</td></tr>';
+  }).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:2rem">Nenhuma matéria-prima cadastrada</td></tr>';
 }
 function renderEstoque(prods){
   const tb=document.getElementById('tb-estoque');
@@ -1088,11 +1102,13 @@ function renderEstoque(prods){
       p.tempo_preparo?`⏱ Prep: ${p.tempo_preparo} ${p.tempo_preparo_unidade||'minutos'}`:'',
       p.tempo_entrega?`🚚 Entr: ${p.tempo_entrega} ${p.tempo_entrega_unidade||'min'}`:''
     ].filter(Boolean).join('<br>');
+    const obs=String(p.descricao||'').trim();
     return `<tr>
       <td><b>${escapeHtml(p.nome)}</b>${p.sku?'<br><small style="color:var(--muted)">'+escapeHtml(p.sku)+'</small>':''}</td>
       <td>${escapeHtml(p.categoria_nome||'-')}</td><td>${fmt(p.custo)}</td><td>${fmt(p.preco)}<span class="stock-pill">Total: ${fmt(valorLinha)}</span></td>
       <td style="color:var(--green)">${margem}</td>
       <td style="font-size:0.78rem">${materiaHtml}</td>
+      <td style="max-width:260px;color:var(--muted);font-size:0.8rem">${obs?escapeHtml(obs):'-'}</td>
       <td style="font-size:0.78rem;color:var(--amber)">${tempos||'-'}</td>
       <td><b>${q}</b> / mín ${m}</td>
       <td><span class="badge ${st}">${stTxt}</span></td>
@@ -1101,7 +1117,7 @@ function renderEstoque(prods){
         <button class="btn btn-sm btn-danger" onclick="abrirAjusteEstoque(${p.id},'saida')" title="Saída"><i class="fas fa-minus"></i></button>
         <button class="btn btn-sm btn-danger" onclick="delProd(${p.id},'${String(p.nome||'').replace(/'/g,"\\'")}')" title="Excluir"><i class="fas fa-trash"></i></button>
       </td></tr>`;
-  }).join(''):'<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:2rem">Nenhum produto</td></tr>';
+  }).join(''):'<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:2rem">Nenhum produto</td></tr>';
 }
 document.addEventListener('DOMContentLoaded',()=>{
   const b=document.getElementById('busca-produto');
@@ -1331,7 +1347,7 @@ async function loadPedidos(){
     const dataPedido=document.querySelector('input[name="data_pedido"]');
     if(dataPedido&&!dataPedido.value)dataPedido.value=new Date().toISOString().slice(0,10);
     const selP=document.getElementById('sel-prod-pedido');
-    selP.innerHTML=prods.map(p=>`<option value="${p.id}" data-preco="${p.preco}" data-stock="${p.quantidade||0}" ${Number(p.quantidade||0)<=0?'disabled':''}>${p.nome} (${p.quantidade} un.) — ${fmt(p.preco)}</option>`).join('');
+    selP.innerHTML=prods.map(p=>`<option value="${p.id}" data-preco="${p.preco}" data-stock="${p.quantidade||0}">${p.nome} (${p.quantidade} un.) — ${fmt(p.preco)}</option>`).join('');
     const iaSel=document.getElementById('ia-produto');
     if(iaSel)iaSel.innerHTML='<option value="">Selecione...</option>'+prods.map(p=>`<option value="${p.id}">${escapeHtml(p.nome)} (${p.quantidade||0} un.)</option>`).join('');
     const selV=document.getElementById('sel-vend-pedido');
@@ -1477,6 +1493,9 @@ async function loadAnalisePedidos(){
       const materias=faltasMateria.length
         ? faltasMateria.map(i=>`<div><b>${escapeHtml(i.nome)}</b>: falta ${qtd(i.falta_materia_prima,i.unidade)} · precisa ${qtd(i.quantidade_necessaria,i.unidade)} · tem ${qtd(i.quantidade_disponivel,i.unidade)}</div>`).join('')
         : '<div style="color:var(--green)">Matérias-primas suficientes para os itens analisados.</div>';
+      const motivo=String(p.observacoes||'').includes('[ANALISE_PEDIDO]')
+        ? String(p.observacoes||'').split('[ANALISE_PEDIDO]',2)[1].trim()
+        : '';
       return `
         <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:14px;padding:1rem">
           <div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap;margin-bottom:0.75rem">
@@ -1490,6 +1509,7 @@ async function loadAnalisePedidos(){
             <div><div style="font-size:0.68rem;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.35rem">Produto pronto</div>${produtos}</div>
             <div><div style="font-size:0.68rem;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.35rem">Matéria-prima</div>${materias}</div>
           </div>
+          ${motivo?`<div style="margin-top:0.85rem;color:var(--amber);font-size:0.82rem;line-height:1.5"><b>Motivo:</b> ${escapeHtml(motivo)}</div>`:''}
         </div>`;
     }).join('');
     box.innerHTML=topo+cards;
@@ -1513,7 +1533,7 @@ function addItemPedido(){
   const opt=sel.options[sel.selectedIndex];if(!opt)return;
   const qtd=parseInt(document.getElementById('qtd-pedido').value)||1;
   const stock=parseInt(opt.dataset.stock)||0;
-  if(qtd>stock){notif(`Estoque insuficiente. Disponível: ${stock} un.`,'warn');return;}
+  if(qtd>stock)notif(`Pedido será registrado em análise. Disponível agora: ${stock} un.`,'warn');
   const preco=parseFloat(opt.dataset.preco)||0;
   itensPedido.push({produto_id:sel.value,nome:opt.text.split('(')[0].trim(),quantidade:qtd,preco,subtotal:qtd*preco});
   renderItens();
@@ -1535,11 +1555,12 @@ async function criarPedido(e){
   const totalPed=itensPedido.reduce((s,i)=>s+i.subtotal,0);
   const comVal=(totalPed*comPct/100);
   try{
-    await api('/api/pedidos',{method:'POST',body:JSON.stringify({cliente_nome:fd.get('cliente'),data:fd.get('data_pedido'),data_entrega:fd.get('data_entrega')||null,vendedor_id:fd.get('vendedor_id')||null,observacoes:fd.get('observacoes'),itens:itensPedido,comissao_valor:comVal})});
-    setMsg('msg-pedido','✅ Pedido registrado!',true);
+    const res=await api('/api/pedidos',{method:'POST',body:JSON.stringify({cliente_nome:fd.get('cliente'),data:fd.get('data_pedido'),data_entrega:fd.get('data_entrega')||null,vendedor_id:fd.get('vendedor_id')||null,observacoes:fd.get('observacoes'),itens:itensPedido,comissao_valor:comVal})});
+    const emAnalise=res.status==='em_analise';
+    setMsg('msg-pedido',emAnalise?'✅ Pedido registrado em análise por falta de estoque/matéria-prima. Veja Notificações e Análise de Pedidos.':'✅ Pedido registrado!',true);
     itensPedido=[];renderItens();e.target.reset();
-    loadPedidos();verificarMetas();
-    notif('Pedido registrado! 🎉','success');
+    loadPedidos();loadPainelNotificacoes();loadAvisos();verificarMetas();
+    notif(emAnalise?'Pedido registrado em análise.':'Pedido registrado! 🎉',emAnalise?'warn':'success');
     if(comVal>0)notif(`💰 Comissão gerada: ${fmt(comVal)} para ${optV.text.split('(')[0].trim()}`,'info');
   }catch(ex){setMsg('msg-pedido','❌ '+ex.message,false);}
 }

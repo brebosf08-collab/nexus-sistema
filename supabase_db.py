@@ -561,10 +561,62 @@ def calcular_materias_primas_produto(empresa_id, produto_id, quantidade_produtos
         return {'sucesso': False, 'mensagem': str(e)}
 
 
+def _calcular_faltas_materias_itens(empresa_id, itens):
+    produto_ids = [int(i['produto_id']) for i in itens if i.get('produto_id')]
+    if not produto_ids:
+        return []
+    try:
+        composicoes = supabase.table('produto_materias_primas').select(
+            'produto_id, materia_prima_id, quantidade_por_produto, tipo_calculo, percentual, materias_primas(nome, unidade, quantidade), produtos(nome)'
+        ).eq('empresa_id', empresa_id).in_('produto_id', produto_ids).execute().data or []
+    except Exception:
+        composicoes = supabase.table('produto_materias_primas').select(
+            'produto_id, materia_prima_id, quantidade_por_produto, materias_primas(nome, unidade, quantidade), produtos(nome)'
+        ).eq('empresa_id', empresa_id).in_('produto_id', produto_ids).execute().data or []
+
+    qtd_por_produto = {int(i['produto_id']): float(i.get('quantidade') or 0) for i in itens}
+    consumo = {}
+    for comp in composicoes:
+        pid = int(comp.get('produto_id') or 0)
+        mid = int(comp.get('materia_prima_id') or 0)
+        materia = comp.get('materias_primas') or {}
+        produto = comp.get('produtos') or {}
+        tipo_calculo = comp.get('tipo_calculo') or 'quantidade'
+        percentual = float(comp.get('percentual') or 0)
+        quantidade_base = float(comp.get('quantidade_por_produto') or 0)
+        quantidade_pedido = qtd_por_produto.get(pid, 0)
+        necessario = quantidade_pedido * (percentual / 100) if tipo_calculo == 'percentual' else quantidade_pedido * quantidade_base
+        if necessario <= 0:
+            continue
+        alvo = consumo.setdefault(mid, {
+            'nome': materia.get('nome') or f'Matéria-prima {mid}',
+            'unidade': materia.get('unidade') or 'un',
+            'disponivel': float(materia.get('quantidade') or 0),
+            'necessario': 0,
+            'origens': [],
+        })
+        alvo['necessario'] += necessario
+        alvo['origens'].append(produto.get('nome') or f'Produto {pid}')
+
+    faltas = []
+    for item in consumo.values():
+        falta = max(0, item['necessario'] - item['disponivel'])
+        if falta > 0:
+            faltas.append({
+                'nome': item['nome'],
+                'unidade': item['unidade'],
+                'necessario': round(item['necessario'], 3),
+                'disponivel': round(item['disponivel'], 3),
+                'falta': round(falta, 3),
+                'origens': sorted(set(item['origens'])),
+            })
+    return faltas
+
+
 def analisar_pedidos_estoque(empresa_id):
     try:
         pedidos = supabase.table('pedidos').select(
-            'id, cliente_nome, data, data_entrega, status, total'
+            'id, cliente_nome, data, data_entrega, status, total, observacoes'
         ).eq('empresa_id', empresa_id).in_(
             'status', ['pendente', 'em_analise', 'confirmado']
         ).order('data_entrega', desc=False).execute().data or []
@@ -855,6 +907,7 @@ def criar_pedido(empresa_id, cliente_nome, data, itens, vendedor_id=None, observ
         produto_ids = [int(i['produto_id']) for i in itens]
         prod_res = supabase.table('produtos').select('id, nome, quantidade').eq('empresa_id', empresa_id).in_('id', produto_ids).execute()
         produtos = {int(p['id']): p for p in (prod_res.data or [])}
+        faltas_produtos = []
 
         for item in itens:
             produto_id = int(item['produto_id'])
@@ -865,13 +918,27 @@ def criar_pedido(empresa_id, cliente_nome, data, itens, vendedor_id=None, observ
             if quantidade <= 0:
                 return {'sucesso': False, 'mensagem': 'Quantidade do item deve ser positiva.'}
             if int(produto.get('quantidade') or 0) < quantidade:
-                return {
-                    'sucesso': False,
-                    'mensagem': f"Estoque insuficiente para {produto.get('nome', 'produto')}. Disponível: {produto.get('quantidade') or 0}."
-                }
+                faltas_produtos.append({
+                    'nome': produto.get('nome', 'produto'),
+                    'pedido': quantidade,
+                    'disponivel': int(produto.get('quantidade') or 0),
+                    'falta': quantidade - int(produto.get('quantidade') or 0),
+                })
 
         total = sum(float(i['subtotal']) for i in itens)
         qtd_itens = sum(int(i['quantidade']) for i in itens)
+        faltas_materias = _calcular_faltas_materias_itens(empresa_id, itens)
+        motivos = []
+        for falta in faltas_produtos:
+            motivos.append(f"Produto não pronto: {falta['nome']} falta {falta['falta']} un. (pedido {falta['pedido']}, disponível {falta['disponivel']})")
+        for falta in faltas_materias:
+            motivos.append(
+                f"Matéria-prima insuficiente: {falta['nome']} falta {falta['falta']:g} {falta['unidade']} "
+                f"(precisa {falta['necessario']:g}, tem {falta['disponivel']:g})"
+            )
+        observacoes_final = observacoes or ''
+        if motivos:
+            observacoes_final = f"{observacoes_final}\n[ANALISE_PEDIDO] " + ' | '.join(motivos)
         
         p_data = {
             "empresa_id": empresa_id,
@@ -882,8 +949,8 @@ def criar_pedido(empresa_id, cliente_nome, data, itens, vendedor_id=None, observ
             "forma_pagamento": forma_pagamento or None,
             "total": total,
             "quantidade_itens": qtd_itens,
-            "status": 'pendente',
-            "observacoes": observacoes,
+            "status": 'em_analise' if motivos else 'pendente',
+            "observacoes": observacoes_final.strip(),
             "mensagem_cliente": mensagem_cliente,
             "comissao_valor": float(comissao_valor or 0),
             "cliente_id": cliente_id
@@ -916,17 +983,32 @@ def criar_pedido(empresa_id, cliente_nome, data, itens, vendedor_id=None, observ
             # Atualizar estoque
             r = supabase.table('produtos').select('quantidade').eq('id', item['produto_id']).eq('empresa_id', empresa_id).execute()
             if r.data:
-                nova_qtd = r.data[0]['quantidade'] - int(item['quantidade'])
+                qtd_saida = min(int(r.data[0]['quantidade'] or 0), int(item['quantidade']))
+                nova_qtd = int(r.data[0]['quantidade'] or 0) - qtd_saida
                 supabase.table('produtos').update({'quantidade': nova_qtd}).eq('id', item['produto_id']).eq('empresa_id', empresa_id).execute()
-                supabase.table('historico').insert({
-                    "empresa_id": empresa_id,
-                    "produto_id": item['produto_id'],
-                    "tipo": 'saida',
-                    "quantidade": int(item['quantidade']),
-                    "observacoes": f'Pedido #{pedido_id} - {cliente_nome}'
-                }).execute()
+                if qtd_saida > 0:
+                    supabase.table('historico').insert({
+                        "empresa_id": empresa_id,
+                        "produto_id": item['produto_id'],
+                        "tipo": 'saida',
+                        "quantidade": qtd_saida,
+                        "observacoes": f'Pedido #{pedido_id} - {cliente_nome}'
+                    }).execute()
+
+        if motivos:
+            try:
+                criar_aviso(
+                    empresa_id,
+                    'pedido_insuficiente',
+                    f'Pedido #{pedido_id} precisa de análise',
+                    ' | '.join(motivos),
+                    'alta',
+                    data_entrega or data
+                )
+            except Exception:
+                pass
                 
-        return {'sucesso': True, 'id': pedido_id}
+        return {'sucesso': True, 'id': pedido_id, 'status': p_data['status'], 'motivos': motivos}
     except Exception as e:
         return {'sucesso': False, 'mensagem': str(e)}
 
