@@ -133,16 +133,21 @@ def _carregar_composicoes_produtos(empresa_id, produtos):
     try:
         produto_ids = [p['id'] for p in produtos]
         vinculos = supabase.table('produto_materias_primas').select(
-            'produto_id, materia_prima_id, quantidade_por_produto, materias_primas(nome, unidade)'
+            'produto_id, materia_prima_id, quantidade_por_produto, tipo_calculo, percentual, materias_primas(nome, unidade)'
         ).eq('empresa_id', empresa_id).in_('produto_id', produto_ids).execute().data or []
         por_produto = {}
         for v in vinculos:
             materia = v.get('materias_primas') or {}
+            tipo_calculo = v.get('tipo_calculo') or 'quantidade'
+            quantidade = float(v.get('quantidade_por_produto') or 0)
+            percentual = float(v.get('percentual') or 0)
             por_produto.setdefault(v.get('produto_id'), []).append({
                 'materia_prima_id': v.get('materia_prima_id'),
                 'nome': materia.get('nome', ''),
                 'unidade': materia.get('unidade', 'un'),
-                'quantidade_por_produto': float(v.get('quantidade_por_produto') or 0),
+                'tipo_calculo': tipo_calculo,
+                'quantidade_por_produto': quantidade,
+                'percentual': percentual,
             })
         for p in produtos:
             if por_produto.get(p.get('id')):
@@ -464,17 +469,211 @@ def salvar_composicao_produto(empresa_id, produto_id, materias):
         rows = []
         for m in materias or []:
             mid = m.get('materia_prima_id') or m.get('id')
-            qtd = float(m.get('quantidade_por_produto') or 0)
-            if mid and qtd > 0:
+            tipo_calculo = (m.get('tipo_calculo') or 'quantidade').strip()
+            percentual = float(m.get('percentual') or 0)
+            qtd = float(m.get('quantidade_por_produto') or m.get('quantidade') or 0)
+            valor_valido = percentual > 0 if tipo_calculo == 'percentual' else qtd > 0
+            if mid and valor_valido:
                 rows.append({
                     'empresa_id': empresa_id,
                     'produto_id': produto_id,
                     'materia_prima_id': int(mid),
+                    'tipo_calculo': tipo_calculo,
                     'quantidade_por_produto': qtd,
+                    'percentual': percentual if tipo_calculo == 'percentual' else 0,
                 })
         if rows:
-            supabase.table('produto_materias_primas').insert(rows).execute()
+            try:
+                supabase.table('produto_materias_primas').insert(rows).execute()
+            except Exception:
+                legacy_rows = [
+                    {
+                        'empresa_id': r['empresa_id'],
+                        'produto_id': r['produto_id'],
+                        'materia_prima_id': r['materia_prima_id'],
+                        'quantidade_por_produto': r['percentual'] if r['tipo_calculo'] == 'percentual' else r['quantidade_por_produto'],
+                    }
+                    for r in rows
+                ]
+                supabase.table('produto_materias_primas').insert(legacy_rows).execute()
         return {'sucesso': True}
+    except Exception as e:
+        return {'sucesso': False, 'mensagem': str(e)}
+
+
+def calcular_materias_primas_produto(empresa_id, produto_id, quantidade_produtos):
+    try:
+        quantidade_produtos = float(quantidade_produtos or 0)
+        if quantidade_produtos <= 0:
+            return {'sucesso': False, 'mensagem': 'Informe uma quantidade maior que zero.'}
+
+        produto_res = supabase.table('produtos').select('id, nome').eq('id', produto_id).eq('empresa_id', empresa_id).execute()
+        if not produto_res.data:
+            return {'sucesso': False, 'mensagem': 'Produto não encontrado.'}
+
+        try:
+            composicoes = supabase.table('produto_materias_primas').select(
+                'produto_id, materia_prima_id, quantidade_por_produto, tipo_calculo, percentual, materias_primas(nome, unidade, quantidade)'
+            ).eq('empresa_id', empresa_id).eq('produto_id', produto_id).execute().data or []
+        except Exception:
+            composicoes = supabase.table('produto_materias_primas').select(
+                'produto_id, materia_prima_id, quantidade_por_produto, materias_primas(nome, unidade, quantidade)'
+            ).eq('empresa_id', empresa_id).eq('produto_id', produto_id).execute().data or []
+
+        itens = []
+        for comp in composicoes:
+            materia = comp.get('materias_primas') or {}
+            tipo_calculo = comp.get('tipo_calculo') or 'quantidade'
+            percentual = float(comp.get('percentual') or 0)
+            quantidade_por_produto = float(comp.get('quantidade_por_produto') or 0)
+
+            if tipo_calculo == 'percentual':
+                necessario = quantidade_produtos * (percentual / 100)
+                regra = f"{percentual:g}% da quantidade produzida"
+            else:
+                necessario = quantidade_produtos * quantidade_por_produto
+                regra = f"{quantidade_por_produto:g} por produto"
+
+            disponivel = float(materia.get('quantidade') or 0)
+            itens.append({
+                'materia_prima_id': comp.get('materia_prima_id'),
+                'nome': materia.get('nome', 'Matéria-prima'),
+                'unidade': materia.get('unidade', 'un'),
+                'tipo_calculo': tipo_calculo,
+                'percentual': percentual,
+                'quantidade_por_produto': quantidade_por_produto,
+                'quantidade_necessaria': round(necessario, 3),
+                'quantidade_disponivel': round(disponivel, 3),
+                'saldo_apos_producao': round(disponivel - necessario, 3),
+                'suficiente': disponivel >= necessario,
+                'regra': regra,
+            })
+
+        return {
+            'sucesso': True,
+            'produto': produto_res.data[0],
+            'quantidade_produtos': quantidade_produtos,
+            'itens': itens,
+            'pode_produzir': all(i['suficiente'] for i in itens),
+            'mensagem': 'Cálculo concluído.'
+        }
+    except Exception as e:
+        return {'sucesso': False, 'mensagem': str(e)}
+
+
+def analisar_pedidos_estoque(empresa_id):
+    try:
+        pedidos = supabase.table('pedidos').select(
+            'id, cliente_nome, data, data_entrega, status, total'
+        ).eq('empresa_id', empresa_id).in_(
+            'status', ['pendente', 'em_analise', 'confirmado']
+        ).order('data_entrega', desc=False).execute().data or []
+
+        if not pedidos:
+            return {'sucesso': True, 'pedidos': [], 'resumo': {'total': 0, 'ok': 0, 'com_falta': 0}}
+
+        pedido_ids = [p['id'] for p in pedidos]
+        itens = supabase.table('itens_pedido').select(
+            'pedido_id, produto_id, quantidade, produtos(id, nome, quantidade)'
+        ).in_('pedido_id', pedido_ids).execute().data or []
+
+        produto_ids = sorted({int(i['produto_id']) for i in itens if i.get('produto_id')})
+        composicoes = []
+        if produto_ids:
+            try:
+                composicoes = supabase.table('produto_materias_primas').select(
+                    'produto_id, materia_prima_id, quantidade_por_produto, tipo_calculo, percentual, materias_primas(nome, unidade, quantidade)'
+                ).eq('empresa_id', empresa_id).in_('produto_id', produto_ids).execute().data or []
+            except Exception:
+                composicoes = supabase.table('produto_materias_primas').select(
+                    'produto_id, materia_prima_id, quantidade_por_produto, materias_primas(nome, unidade, quantidade)'
+                ).eq('empresa_id', empresa_id).in_('produto_id', produto_ids).execute().data or []
+
+        comps_por_produto = {}
+        for comp in composicoes:
+            comps_por_produto.setdefault(int(comp.get('produto_id')), []).append(comp)
+
+        itens_por_pedido = {}
+        for item in itens:
+            itens_por_pedido.setdefault(item.get('pedido_id'), []).append(item)
+
+        analises = []
+        for pedido in pedidos:
+            produtos_analise = []
+            consumo_materias = {}
+
+            for item in itens_por_pedido.get(pedido['id'], []):
+                produto = item.get('produtos') or {}
+                produto_id = int(item.get('produto_id') or 0)
+                quantidade_pedido = float(item.get('quantidade') or 0)
+                estoque_atual = float(produto.get('quantidade') or 0)
+                falta_produto = max(0, quantidade_pedido - estoque_atual)
+
+                produtos_analise.append({
+                    'produto_id': produto_id,
+                    'nome': produto.get('nome') or f'Produto {produto_id}',
+                    'quantidade_pedido': round(quantidade_pedido, 3),
+                    'estoque_atual': round(estoque_atual, 3),
+                    'falta_produto': round(falta_produto, 3),
+                    'suficiente': falta_produto <= 0,
+                })
+
+                for comp in comps_por_produto.get(produto_id, []):
+                    materia = comp.get('materias_primas') or {}
+                    materia_id = int(comp.get('materia_prima_id') or 0)
+                    tipo_calculo = comp.get('tipo_calculo') or 'quantidade'
+                    percentual = float(comp.get('percentual') or 0)
+                    quantidade_base = float(comp.get('quantidade_por_produto') or 0)
+                    if tipo_calculo == 'percentual':
+                        necessario = quantidade_pedido * (percentual / 100)
+                        regra = f'{percentual:g}%'
+                    else:
+                        necessario = quantidade_pedido * quantidade_base
+                        regra = f'{quantidade_base:g} por produto'
+                    if necessario <= 0:
+                        continue
+                    alvo = consumo_materias.setdefault(materia_id, {
+                        'materia_prima_id': materia_id,
+                        'nome': materia.get('nome') or f'Matéria-prima {materia_id}',
+                        'unidade': materia.get('unidade') or 'un',
+                        'quantidade_disponivel': float(materia.get('quantidade') or 0),
+                        'quantidade_necessaria': 0,
+                        'origens': [],
+                    })
+                    alvo['quantidade_necessaria'] += necessario
+                    alvo['origens'].append(f"{produto.get('nome') or 'Produto'} ({regra})")
+
+            materias_analise = []
+            for materia in consumo_materias.values():
+                necessario = float(materia['quantidade_necessaria'] or 0)
+                disponivel = float(materia['quantidade_disponivel'] or 0)
+                materia['quantidade_necessaria'] = round(necessario, 3)
+                materia['quantidade_disponivel'] = round(disponivel, 3)
+                materia['falta_materia_prima'] = round(max(0, necessario - disponivel), 3)
+                materia['saldo_apos_pedido'] = round(disponivel - necessario, 3)
+                materia['suficiente'] = disponivel >= necessario
+                materias_analise.append(materia)
+
+            falta_produtos = [p for p in produtos_analise if not p['suficiente']]
+            falta_materias = [m for m in materias_analise if not m['suficiente']]
+            analises.append({
+                **pedido,
+                'produtos': produtos_analise,
+                'materias_primas': materias_analise,
+                'faltas_produtos': falta_produtos,
+                'faltas_materias_primas': falta_materias,
+                'pode_atender': not falta_produtos and not falta_materias,
+            })
+
+        return {
+            'sucesso': True,
+            'pedidos': analises,
+            'resumo': {
+                'total': len(analises),
+                'ok': sum(1 for p in analises if p['pode_atender']),
+                'com_falta': sum(1 for p in analises if not p['pode_atender']),
+            }
+        }
     except Exception as e:
         return {'sucesso': False, 'mensagem': str(e)}
 
@@ -498,7 +697,7 @@ def baixar_materias_primas_do_pedido(empresa_id, pedido_id):
 
         produto_ids = [int(i['produto_id']) for i in itens if i.get('produto_id')]
         composicoes = supabase.table('produto_materias_primas').select(
-            'produto_id, materia_prima_id, quantidade_por_produto'
+            'produto_id, materia_prima_id, quantidade_por_produto, tipo_calculo, percentual'
         ).eq('empresa_id', empresa_id).in_('produto_id', produto_ids).execute().data or []
 
         if not composicoes:
@@ -514,7 +713,13 @@ def baixar_materias_primas_do_pedido(empresa_id, pedido_id):
         for comp in composicoes:
             mid = int(comp.get('materia_prima_id'))
             pid = int(comp.get('produto_id'))
-            necessario = float(comp.get('quantidade_por_produto') or 0) * qtd_por_produto.get(pid, 0)
+            tipo_calculo = comp.get('tipo_calculo') or 'quantidade'
+            percentual = float(comp.get('percentual') or 0)
+            quantidade_base = float(comp.get('quantidade_por_produto') or 0)
+            if tipo_calculo == 'percentual':
+                necessario = qtd_por_produto.get(pid, 0) * (percentual / 100)
+            else:
+                necessario = quantidade_base * qtd_por_produto.get(pid, 0)
             if necessario <= 0:
                 continue
             consumo[mid] = consumo.get(mid, 0) + necessario

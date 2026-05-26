@@ -245,8 +245,15 @@
               <select id="sel-materia-prod"><option value="">Cadastre uma matéria-prima primeiro</option></select>
             </div>
             <div class="field" style="width:180px;margin:0">
-              <label>Qtd usada</label>
-              <input id="qtd-materia-prod" type="number" step="0.01" min="0" placeholder="Ex: 0,25">
+              <label>Tipo de cálculo</label>
+              <select id="tipo-materia-prod">
+                <option value="quantidade">Qtd por produto</option>
+                <option value="percentual">Porcentagem</option>
+              </select>
+            </div>
+            <div class="field" style="width:180px;margin:0">
+              <label>Valor</label>
+              <input id="qtd-materia-prod" type="number" step="0.01" min="0" placeholder="Ex: 0,25 ou 12%">
             </div>
             <button type="button" class="btn btn-success" onclick="addMateriaAoProduto()"><i class="fas fa-plus"></i> Adicionar</button>
           </div>
@@ -391,6 +398,22 @@
   <!-- PEDIDOS -->
   <div id="sec-pedidos" class="sec">
     <div class="page-title"><i class="fas fa-file-invoice-dollar"></i> Gestão de Pedidos</div>
+    <div class="card">
+      <h3><i class="fas fa-wand-magic-sparkles" style="color:var(--accent)"></i> IA de matéria-prima</h3>
+      <div class="form-grid" style="margin-bottom:1rem">
+        <div class="field"><label>Produto</label><select id="ia-produto"><option value="">Carregando produtos...</option></select></div>
+        <div class="field"><label>Quantidade a produzir</label><input id="ia-quantidade" type="number" step="1" min="1" placeholder="Ex: 50"></div>
+      </div>
+      <button type="button" class="btn btn-primary" onclick="calcularMateriaPrimaIA()"><i class="fas fa-calculator"></i> Calcular Matéria-prima</button>
+      <div id="ia-resultado" style="margin-top:1rem"></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1rem">
+        <h3 style="margin:0"><i class="fas fa-clipboard-check" style="color:var(--accent)"></i> Análise de Pedidos</h3>
+        <button type="button" class="btn btn-sm btn-outline" onclick="loadAnalisePedidos()"><i class="fas fa-rotate"></i> Atualizar</button>
+      </div>
+      <div id="analise-pedidos" style="display:grid;gap:0.85rem"></div>
+    </div>
     <div class="card">
       <h3>Novo Pedido</h3>
       <form onsubmit="criarPedido(event)">
@@ -1220,20 +1243,25 @@ async function registrarEntradaMateria(e){
 
 function addMateriaAoProduto(){
   const sel=document.getElementById('sel-materia-prod');
+  const tipo=(document.getElementById('tipo-materia-prod')?.value||'quantidade');
   const qtd=Number(document.getElementById('qtd-materia-prod').value);
   if(!sel?.value){notif('Selecione uma matéria-prima','warn');return;}
-  if(!qtd||qtd<=0){notif('Informe a quantidade usada','warn');return;}
+  if(!qtd||qtd<=0){notif('Informe o valor usado','warn');return;}
   const opt=sel.selectedOptions[0];
   const id=Number(sel.value);
   const existente=composicaoProduto.find(m=>Number(m.materia_prima_id)===id);
   if(existente){
-    existente.quantidade_por_produto=qtd;
+    existente.tipo_calculo=tipo;
+    existente.quantidade_por_produto=tipo==='quantidade'?qtd:0;
+    existente.percentual=tipo==='percentual'?qtd:0;
   }else{
     composicaoProduto.push({
       materia_prima_id:id,
       nome:opt.dataset.nome||opt.textContent,
       unidade:opt.dataset.unidade||'un',
-      quantidade_por_produto:qtd
+      tipo_calculo:tipo,
+      quantidade_por_produto:tipo==='quantidade'?qtd:0,
+      percentual:tipo==='percentual'?qtd:0
     });
   }
   document.getElementById('qtd-materia-prod').value='';
@@ -1251,7 +1279,9 @@ function renderComposicaoProduto(){
   tb.innerHTML=composicaoProduto.length?composicaoProduto.map((m,i)=>`
     <tr>
       <td><b>${escapeHtml(m.nome)}</b></td>
-      <td>${Number(m.quantidade_por_produto||0).toLocaleString('pt-BR')} ${escapeHtml(m.unidade||'un')}</td>
+      <td>${m.tipo_calculo==='percentual'
+        ? Number(m.percentual||0).toLocaleString('pt-BR')+'%'
+        : Number(m.quantidade_por_produto||0).toLocaleString('pt-BR')+' '+escapeHtml(m.unidade||'un')+' por produto'}</td>
       <td><button type="button" class="btn btn-sm btn-danger" onclick="removeMateriaDoProduto(${i})"><i class="fas fa-times"></i></button></td>
     </tr>`).join(''):'<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:1rem">Nenhuma matéria-prima adicionada</td></tr>';
 }
@@ -1302,6 +1332,8 @@ async function loadPedidos(){
     if(dataPedido&&!dataPedido.value)dataPedido.value=new Date().toISOString().slice(0,10);
     const selP=document.getElementById('sel-prod-pedido');
     selP.innerHTML=prods.map(p=>`<option value="${p.id}" data-preco="${p.preco}" data-stock="${p.quantidade||0}" ${Number(p.quantidade||0)<=0?'disabled':''}>${p.nome} (${p.quantidade} un.) — ${fmt(p.preco)}</option>`).join('');
+    const iaSel=document.getElementById('ia-produto');
+    if(iaSel)iaSel.innerHTML='<option value="">Selecione...</option>'+prods.map(p=>`<option value="${p.id}">${escapeHtml(p.nome)} (${p.quantidade||0} un.)</option>`).join('');
     const selV=document.getElementById('sel-vend-pedido');
     selV.innerHTML='<option value="">Sem vendedor</option>'+vends.map(v=>`<option value="${v.id}" data-com="${v.comissao||0}">${v.nome} (${v.comissao||0}% comissão)</option>`).join('');
     const tb=document.getElementById('tb-pedidos');
@@ -1328,6 +1360,7 @@ async function loadPedidos(){
     }).join(''):'<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:2rem">Nenhum pedido</td></tr>';
     // Comissões por vendedor
     calcularComissoes(pedidos,vends);
+    loadAnalisePedidos();
   }catch(e){console.error(e);}
 }
 
@@ -1370,6 +1403,99 @@ async function salvarPedidoDetalhe(){
     fecharPedidoDetalhe();
     loadPedidos();
   }catch(ex){notif(ex.message || 'Erro ao salvar pedido','error');}
+}
+
+async function calcularMateriaPrimaIA(){
+  const produtoId=document.getElementById('ia-produto')?.value;
+  const quantidade=Number(document.getElementById('ia-quantidade')?.value||0);
+  const box=document.getElementById('ia-resultado');
+  if(!produtoId||quantidade<=0){box.innerHTML='<div class="msg err">Informe produto e quantidade.</div>';return;}
+  box.innerHTML='<div style="color:var(--muted)">Calculando...</div>';
+  try{
+    const res=await api('/api/ia/materias-primas/calcular',{method:'POST',body:JSON.stringify({produto_id:produtoId,quantidade})});
+    if(!res.itens?.length){
+      box.innerHTML='<div class="msg err">Esse produto ainda não tem matéria-prima cadastrada na composição.</div>';
+      return;
+    }
+    const status=res.pode_produzir
+      ? '<span class="badge badge-ok">Pode produzir</span>'
+      : '<span class="badge badge-zero">Falta matéria-prima</span>';
+    box.innerHTML=`
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;gap:1rem;flex-wrap:wrap">
+        <b>${escapeHtml(res.produto?.nome||'Produto')} · ${Number(res.quantidade_produtos||0).toLocaleString('pt-BR')} unidades</b>
+        ${status}
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Matéria-prima</th><th>Regra</th><th>Necessário</th><th>Disponível</th><th>Saldo</th></tr></thead>
+          <tbody>
+            ${res.itens.map(i=>`
+              <tr>
+                <td><b>${escapeHtml(i.nome)}</b></td>
+                <td>${escapeHtml(i.regra||'-')}</td>
+                <td>${Number(i.quantidade_necessaria||0).toLocaleString('pt-BR')} ${escapeHtml(i.unidade||'un')}</td>
+                <td>${Number(i.quantidade_disponivel||0).toLocaleString('pt-BR')} ${escapeHtml(i.unidade||'un')}</td>
+                <td><span class="badge ${i.suficiente?'badge-ok':'badge-zero'}">${Number(i.saldo_apos_producao||0).toLocaleString('pt-BR')} ${escapeHtml(i.unidade||'un')}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }catch(ex){
+    box.innerHTML=`<div class="msg err">❌ ${escapeHtml(ex.message)}</div>`;
+  }
+}
+
+async function loadAnalisePedidos(){
+  const box=document.getElementById('analise-pedidos');
+  if(!box)return;
+  box.innerHTML='<div style="color:var(--muted)">Analisando pedidos...</div>';
+  const qtd=(v,u='')=>`${Number(v||0).toLocaleString('pt-BR',{maximumFractionDigits:3})}${u?' '+escapeHtml(u):''}`;
+  try{
+    const res=await api('/api/pedidos/analise');
+    const pedidos=res.pedidos||[];
+    const resumo=res.resumo||{};
+    if(!pedidos.length){
+      box.innerHTML='<div style="color:var(--muted);padding:0.5rem 0">Nenhum pedido pendente ou futuro para analisar.</div>';
+      return;
+    }
+    const topo=`
+      <div class="inventory-summary" style="margin-bottom:0.25rem">
+        <div class="mini-stat"><div class="mini-label">Pedidos analisados</div><div class="mini-value">${resumo.total||0}</div></div>
+        <div class="mini-stat"><div class="mini-label">Pode atender</div><div class="mini-value" style="color:var(--green)">${resumo.ok||0}</div></div>
+        <div class="mini-stat"><div class="mini-label">Com falta</div><div class="mini-value" style="color:var(--red)">${resumo.com_falta||0}</div></div>
+      </div>`;
+    const cards=pedidos.map(p=>{
+      const faltasProduto=p.faltas_produtos||[];
+      const faltasMateria=p.faltas_materias_primas||[];
+      const status=p.pode_atender
+        ? '<span class="badge badge-ok">Pode atender</span>'
+        : '<span class="badge badge-zero">Precisa ajustar</span>';
+      const produtos=faltasProduto.length
+        ? faltasProduto.map(i=>`<div><b>${escapeHtml(i.nome)}</b>: falta ${qtd(i.falta_produto,'un')} de ${qtd(i.quantidade_pedido,'un')}</div>`).join('')
+        : '<div style="color:var(--green)">Produtos prontos suficientes.</div>';
+      const materias=faltasMateria.length
+        ? faltasMateria.map(i=>`<div><b>${escapeHtml(i.nome)}</b>: falta ${qtd(i.falta_materia_prima,i.unidade)} · precisa ${qtd(i.quantidade_necessaria,i.unidade)} · tem ${qtd(i.quantidade_disponivel,i.unidade)}</div>`).join('')
+        : '<div style="color:var(--green)">Matérias-primas suficientes para os itens analisados.</div>';
+      return `
+        <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:14px;padding:1rem">
+          <div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap;margin-bottom:0.75rem">
+            <div>
+              <b>Pedido #${p.id} · ${escapeHtml(p.cliente_nome||'Cliente')}</b>
+              <div style="font-size:0.78rem;color:var(--muted);margin-top:0.25rem">Pedido: ${fmtData(p.data)} · Entrega: ${p.data_entrega?fmtData(p.data_entrega):'-'} · Status: ${escapeHtml(p.status||'pendente')}</div>
+            </div>
+            ${status}
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;font-size:0.86rem;line-height:1.6">
+            <div><div style="font-size:0.68rem;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.35rem">Produto pronto</div>${produtos}</div>
+            <div><div style="font-size:0.68rem;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.35rem">Matéria-prima</div>${materias}</div>
+          </div>
+        </div>`;
+    }).join('');
+    box.innerHTML=topo+cards;
+  }catch(ex){
+    box.innerHTML=`<div class="msg err">Erro na análise: ${escapeHtml(ex.message)}</div>`;
+  }
 }
 
 function calcularComissoes(pedidos,vends){

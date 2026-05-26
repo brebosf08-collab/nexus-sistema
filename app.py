@@ -81,9 +81,11 @@ from supabase_db import (
     criar_produto, obter_produtos, obter_produto, atualizar_produto, deletar_produto,
     adicionar_estoque, retirar_estoque,
     criar_materia_prima, obter_materias_primas, atualizar_materia_prima, deletar_materia_prima,
-    salvar_composicao_produto, adicionar_estoque_materia_prima, retirar_estoque_materia_prima,
+    salvar_composicao_produto, calcular_materias_primas_produto,
+    adicionar_estoque_materia_prima, retirar_estoque_materia_prima,
     criar_vendedor, obter_vendedores, deletar_vendedor,
     criar_pedido, obter_pedidos, obter_pedido_detalhado, atualizar_status_pedido, atualizar_pedido,
+    analisar_pedidos_estoque,
     obter_historico,
     criar_reuniao, obter_reunioes, atualizar_status_reuniao, deletar_reuniao,
     criar_contato, obter_contatos, deletar_contato,
@@ -201,15 +203,20 @@ def extrair_materias_produto(data):
         try:
             materia_id = item.get('materia_prima_id') or item.get('id')
             quantidade = _to_float_safe(item.get('quantidade_por_produto') or item.get('quantidade') or 0)
+            tipo_calculo = (item.get('tipo_calculo') or 'quantidade').strip()
+            percentual = _to_float_safe(item.get('percentual') or 0)
         except AttributeError:
             continue
-        if not materia_id or quantidade <= 0:
+        valor_valido = percentual > 0 if tipo_calculo == 'percentual' else quantidade > 0
+        if not materia_id or not valor_valido:
             continue
         materias.append({
             'materia_prima_id': int(materia_id),
             'nome': (item.get('nome') or '').strip(),
             'unidade': (item.get('unidade') or 'un').strip() or 'un',
+            'tipo_calculo': tipo_calculo,
             'quantidade_por_produto': quantidade,
+            'percentual': percentual if tipo_calculo == 'percentual' else 0,
         })
     return materias
 
@@ -761,6 +768,23 @@ def api_saida_materia_prima(mid):
     return jsonify(r)
 
 
+@app.route('/api/ia/materias-primas/calcular', methods=['POST'])
+@login_required
+def api_ia_calcular_materias_primas():
+    if session.get('empresa_tipo') != 'fornecedor':
+        return jsonify({'sucesso': False, 'mensagem': 'Apenas fornecedores podem calcular produção'}), 403
+
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        produto_id = int(data.get('produto_id'))
+        quantidade = _to_float_safe(data.get('quantidade'))
+    except Exception:
+        return jsonify({'sucesso': False, 'mensagem': 'Produto ou quantidade inválidos'}), 400
+
+    r = calcular_materias_primas_produto(get_empresa_id(), produto_id, quantidade)
+    return jsonify(r), 200 if r.get('sucesso') else 400
+
+
 # ═══════════════════════════════════════════════════════════════
 # PRODUTOS V2 - COM INVENTÁRIO COMPLETO (NOVO)
 # ═══════════════════════════════════════════════════════════════
@@ -946,6 +970,15 @@ def api_listar_pedidos():
     if session.get('empresa_tipo') == 'cliente':
         return jsonify(obter_pedidos(cliente_id=get_empresa_id()))
     return jsonify(obter_pedidos(empresa_id=get_empresa_id()))
+
+
+@app.route('/api/pedidos/analise', methods=['GET'])
+@login_required
+def api_analise_pedidos():
+    if session.get('empresa_tipo') != 'fornecedor':
+        return jsonify({'sucesso': False, 'mensagem': 'Apenas fornecedor pode analisar pedidos'}), 403
+    r = analisar_pedidos_estoque(get_empresa_id())
+    return jsonify(r), 200 if r.get('sucesso') else 400
 
 
 @app.route('/api/pedidos', methods=['POST'])

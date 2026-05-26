@@ -141,9 +141,14 @@ CREATE TABLE IF NOT EXISTS produto_materias_primas (
     produto_id INTEGER REFERENCES produtos(id) ON DELETE CASCADE,
     materia_prima_id INTEGER REFERENCES materias_primas(id) ON DELETE CASCADE,
     quantidade_por_produto NUMERIC(12,3) NOT NULL DEFAULT 0,
+    tipo_calculo VARCHAR(20) DEFAULT 'quantidade',
+    percentual NUMERIC(8,3) DEFAULT 0,
     criado_em TIMESTAMP DEFAULT NOW(),
     UNIQUE(produto_id, materia_prima_id)
 );
+
+ALTER TABLE produto_materias_primas ADD COLUMN IF NOT EXISTS tipo_calculo VARCHAR(20) DEFAULT 'quantidade';
+ALTER TABLE produto_materias_primas ADD COLUMN IF NOT EXISTS percentual NUMERIC(8,3) DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS historico_materias_primas (
     id SERIAL PRIMARY KEY,
