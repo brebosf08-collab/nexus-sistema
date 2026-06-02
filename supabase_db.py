@@ -51,9 +51,9 @@ def _limpar_marcadores_descricao(descricao):
     return '\n'.join(linhas).strip()
 
 
-def montar_descricao_materia_prima(descricao='', unidade='un', custo_unitario=0):
+def montar_descricao_materia_prima(descricao='', unidade='kg', custo_unitario=0):
     meta = {
-        'unidade': (unidade or 'un').strip() or 'un',
+        'unidade': (unidade or 'kg').strip() or 'kg',
         'custo_unitario': float(custo_unitario or 0),
     }
     base = _limpar_marcadores_descricao(descricao)
@@ -71,7 +71,7 @@ def _normalizar_materia_prima(produto):
     materia_meta = _parse_json_marker(descricao, MATERIA_ESTOQUE_MARKER, {})
     if tipo_item == 'materia_prima':
         produto['materia_prima'] = True
-        produto['unidade'] = materia_meta.get('unidade', 'un')
+        produto['unidade'] = materia_meta.get('unidade', 'kg')
         produto['custo_unitario'] = materia_meta.get('custo_unitario', produto.get('custo') or 0)
 
     materias_produto = _parse_json_marker(descricao, MATERIAS_PRODUTO_MARKER, [])
@@ -90,13 +90,13 @@ def _normalizar_materia_prima(produto):
             produto['materia_prima'] = materia
             produto['materia_prima_nome'] = materia.get('nome', '')
             produto['materia_prima_quantidade'] = materia.get('quantidade', 0)
-            produto['materia_prima_unidade'] = materia.get('unidade', 'un')
+            produto['materia_prima_unidade'] = materia.get('unidade', 'kg')
             produto['materia_prima_minimo'] = materia.get('minimo', 0)
             if 'materias_primas' not in produto:
                 produto['materias_primas'] = [{
                     'materia_prima_id': None,
                     'nome': materia.get('nome', ''),
-                    'unidade': materia.get('unidade', 'un'),
+                    'unidade': materia.get('unidade', 'kg'),
                     'quantidade_por_produto': materia.get('quantidade', 0),
                 }]
     return produto
@@ -105,9 +105,9 @@ def _normalizar_materia_prima(produto):
 def _normalizar_materia_prima_tabela(item):
     item = dict(item)
     item['tipo_item'] = 'materia_prima'
-    item['unidade'] = item.get('unidade') or 'un'
-    item['quantidade'] = int(float(item.get('quantidade') or 0))
-    item['minimo'] = int(float(item.get('minimo') or 0))
+    item['unidade'] = item.get('unidade') or 'kg'
+    item['quantidade'] = float(item.get('quantidade') or 0)
+    item['minimo'] = float(item.get('minimo') or 0)
     item['custo_unitario'] = float(item.get('custo_unitario') or 0)
     item['custo'] = item['custo_unitario']
     return item
@@ -144,7 +144,7 @@ def _carregar_composicoes_produtos(empresa_id, produtos):
             por_produto.setdefault(v.get('produto_id'), []).append({
                 'materia_prima_id': v.get('materia_prima_id'),
                 'nome': materia.get('nome', ''),
-                'unidade': materia.get('unidade', 'un'),
+                'unidade': materia.get('unidade', 'kg'),
                 'tipo_calculo': tipo_calculo,
                 'quantidade_por_produto': quantidade,
                 'percentual': percentual,
@@ -370,7 +370,7 @@ def obter_materias_primas(empresa_id):
         return []
 
 
-def criar_materia_prima(empresa_id, nome, unidade='un', quantidade=0, minimo=0, custo_unitario=0, sku='', descricao=''):
+def criar_materia_prima(empresa_id, nome, unidade='kg', quantidade=0, minimo=0, custo_unitario=0, sku='', descricao=''):
     try:
         if not empresa_id:
             return {'sucesso': False, 'mensagem': 'Empresa não identificada.'}
@@ -381,9 +381,9 @@ def criar_materia_prima(empresa_id, nome, unidade='un', quantidade=0, minimo=0, 
             "empresa_id": empresa_id,
             "nome": nome.strip(),
             "sku": (sku or '').strip() or None,
-            "unidade": (unidade or 'un').strip() or 'un',
-            "quantidade": int(float(quantidade or 0)),
-            "minimo": int(float(minimo or 0)),
+            "unidade": (unidade or 'kg').strip() or 'kg',
+            "quantidade": float(quantidade or 0),
+            "minimo": float(minimo or 0),
             "custo_unitario": float(custo_unitario or 0),
             "descricao": (descricao or '').strip(),
         }
@@ -409,10 +409,10 @@ def atualizar_materia_prima(empresa_id, materia_id, dados):
         update_data = {
             'nome': (dados.get('nome', atual_norm.get('nome')) or '').strip(),
             'sku': (dados.get('sku', atual_norm.get('sku')) or '').strip() or None,
-            'unidade': (dados.get('unidade', atual_norm.get('unidade')) or 'un').strip(),
+            'unidade': (dados.get('unidade', atual_norm.get('unidade')) or 'kg').strip() or 'kg',
             'custo_unitario': float(dados.get('custo_unitario', atual_norm.get('custo_unitario', 0)) or 0),
-            'quantidade': int(float(dados.get('quantidade', atual_norm.get('quantidade', 0)) or 0)),
-            'minimo': int(float(dados.get('minimo', atual_norm.get('minimo', 0)) or 0)),
+            'quantidade': float(dados.get('quantidade', atual_norm.get('quantidade', 0)) or 0),
+            'minimo': float(dados.get('minimo', atual_norm.get('minimo', 0)) or 0),
             'descricao': dados.get('descricao', atual_norm.get('descricao', '')),
         }
         supabase.table('materias_primas').update(update_data).eq('id', materia_id).eq('empresa_id', empresa_id).execute()
@@ -426,7 +426,7 @@ def adicionar_estoque_materia_prima(empresa_id, materia_id, quantidade, observac
         r = supabase.table('materias_primas').select('quantidade').eq('id', materia_id).eq('empresa_id', empresa_id).execute()
         if not r.data:
             return {'sucesso': False, 'mensagem': 'Matéria-prima não encontrada'}
-        nova_qtd = int(r.data[0].get('quantidade') or 0) + int(quantidade)
+        nova_qtd = float(r.data[0].get('quantidade') or 0) + float(quantidade)
         supabase.table('materias_primas').update({'quantidade': nova_qtd}).eq('id', materia_id).eq('empresa_id', empresa_id).execute()
         registrar_historico_materia_prima(empresa_id, materia_id, 'entrada', quantidade, observacoes or 'Entrada de matéria-prima')
         return {'sucesso': True, 'nova_quantidade': nova_qtd}
@@ -439,10 +439,11 @@ def retirar_estoque_materia_prima(empresa_id, materia_id, quantidade, observacoe
         r = supabase.table('materias_primas').select('quantidade').eq('id', materia_id).eq('empresa_id', empresa_id).execute()
         if not r.data:
             return {'sucesso': False, 'mensagem': 'Matéria-prima não encontrada'}
-        atual = int(r.data[0].get('quantidade') or 0)
-        if atual < int(quantidade):
+        atual = float(r.data[0].get('quantidade') or 0)
+        quantidade = float(quantidade or 0)
+        if atual < quantidade:
             return {'sucesso': False, 'mensagem': 'Estoque insuficiente'}
-        nova_qtd = atual - int(quantidade)
+        nova_qtd = atual - quantidade
         supabase.table('materias_primas').update({'quantidade': nova_qtd}).eq('id', materia_id).eq('empresa_id', empresa_id).execute()
         registrar_historico_materia_prima(empresa_id, materia_id, 'saida', quantidade, observacoes or 'Saída de matéria-prima')
         return {'sucesso': True, 'nova_quantidade': nova_qtd}
@@ -538,7 +539,7 @@ def calcular_materias_primas_produto(empresa_id, produto_id, quantidade_produtos
             itens.append({
                 'materia_prima_id': comp.get('materia_prima_id'),
                 'nome': materia.get('nome', 'Matéria-prima'),
-                'unidade': materia.get('unidade', 'un'),
+                'unidade': materia.get('unidade', 'kg'),
                 'tipo_calculo': tipo_calculo,
                 'percentual': percentual,
                 'quantidade_por_produto': quantidade_por_produto,
@@ -556,6 +557,85 @@ def calcular_materias_primas_produto(empresa_id, produto_id, quantidade_produtos
             'itens': itens,
             'pode_produzir': all(i['suficiente'] for i in itens),
             'mensagem': 'Cálculo concluído.'
+        }
+    except Exception as e:
+        return {'sucesso': False, 'mensagem': str(e)}
+
+
+def registrar_ordem_producao(empresa_id, produto_id, quantidade, observacoes='', data_producao=None):
+    try:
+        quantidade = int(float(quantidade or 0))
+        if quantidade <= 0:
+            return {'sucesso': False, 'mensagem': 'Informe uma quantidade maior que zero.'}
+
+        produto_res = supabase.table('produtos').select('id, nome, quantidade').eq(
+            'id', produto_id
+        ).eq('empresa_id', empresa_id).execute()
+        if not produto_res.data:
+            return {'sucesso': False, 'mensagem': 'Produto não encontrado.'}
+        produto = produto_res.data[0]
+
+        calculo = calcular_materias_primas_produto(empresa_id, produto_id, quantidade)
+        if not calculo.get('sucesso'):
+            return calculo
+        itens_consumo = calculo.get('itens') or []
+        if not itens_consumo:
+            return {'sucesso': False, 'mensagem': 'Cadastre a composição de matéria-prima desse produto antes de produzir.'}
+
+        faltas = [i for i in itens_consumo if not i.get('suficiente')]
+        if faltas:
+            msg = '; '.join(
+                f"{i['nome']}: falta {abs(float(i.get('saldo_apos_producao') or 0)):g} {i.get('unidade') or 'kg'}"
+                for i in faltas
+            )
+            criar_aviso(
+                empresa_id,
+                'producao_insuficiente',
+                'Ordem de produção com falta de matéria-prima',
+                f"{produto.get('nome')} não pode produzir {quantidade} un. {msg}",
+                'alta'
+            )
+            return {'sucesso': False, 'mensagem': 'Matéria-prima insuficiente: ' + msg, 'analise': calculo}
+
+        obs_base = (observacoes or '').strip()
+        if data_producao:
+            obs_base = f"{obs_base} | Data da produção: {data_producao}".strip(' |')
+        obs_ordem = f"Ordem de produção - {produto.get('nome')} x {quantidade} un"
+        if obs_base:
+            obs_ordem += f" | {obs_base}"
+
+        for item in itens_consumo:
+            mid = item.get('materia_prima_id')
+            necessario = float(item.get('quantidade_necessaria') or 0)
+            if mid and necessario > 0:
+                baixa = retirar_estoque_materia_prima(
+                    empresa_id,
+                    mid,
+                    necessario,
+                    f"Consumo na produção de {produto.get('nome')} x {quantidade} un | {obs_base}".strip(' |')
+                )
+                if not baixa.get('sucesso'):
+                    return baixa
+
+        entrada = adicionar_estoque(empresa_id, produto_id, quantidade, obs_ordem)
+        if not entrada.get('sucesso'):
+            return entrada
+
+        criar_aviso(
+            empresa_id,
+            'producao_concluida',
+            'Ordem de produção concluída',
+            f"{quantidade} un. de {produto.get('nome')} entraram no estoque.",
+            'normal'
+        )
+
+        return {
+            'sucesso': True,
+            'mensagem': 'Produção registrada, matéria-prima baixada e produto adicionado ao estoque.',
+            'produto': produto,
+            'quantidade': quantidade,
+            'nova_quantidade': entrada.get('nova_quantidade'),
+            'analise': calculo,
         }
     except Exception as e:
         return {'sucesso': False, 'mensagem': str(e)}
@@ -590,7 +670,7 @@ def _calcular_faltas_materias_itens(empresa_id, itens):
             continue
         alvo = consumo.setdefault(mid, {
             'nome': materia.get('nome') or f'Matéria-prima {mid}',
-            'unidade': materia.get('unidade') or 'un',
+            'unidade': materia.get('unidade') or 'kg',
             'disponivel': float(materia.get('quantidade') or 0),
             'necessario': 0,
             'origens': [],
@@ -687,7 +767,7 @@ def analisar_pedidos_estoque(empresa_id):
                     alvo = consumo_materias.setdefault(materia_id, {
                         'materia_prima_id': materia_id,
                         'nome': materia.get('nome') or f'Matéria-prima {materia_id}',
-                        'unidade': materia.get('unidade') or 'un',
+                        'unidade': materia.get('unidade') or 'kg',
                         'quantidade_disponivel': float(materia.get('quantidade') or 0),
                         'quantidade_necessaria': 0,
                         'origens': [],
@@ -791,7 +871,7 @@ def baixar_materias_primas_do_pedido(empresa_id, pedido_id):
             atual = float((materia or {}).get('quantidade') or 0)
             if not materia or atual < necessario:
                 nome = (materia or {}).get('nome') or f'Matéria-prima {mid}'
-                unidade = (materia or {}).get('unidade') or 'un'
+                unidade = (materia or {}).get('unidade') or 'kg'
                 faltantes.append(f"{nome}: precisa {necessario:g} {unidade}, disponível {atual:g} {unidade}")
 
         if faltantes:
@@ -1158,31 +1238,30 @@ def deletar_contato(empresa_id, contato_id):
 def obter_dashboard(empresa_id):
     try:
         # Usando Python para contagens por limitação do Supabase no client básico (aggregate functions)
-        p_res = supabase.table('produtos').select('quantidade, preco, minimo').eq('empresa_id', empresa_id).execute().data or []
-        pd_res = supabase.table('pedidos').select('total').eq('empresa_id', empresa_id).execute().data or []
+        p_res = supabase.table('produtos').select('quantidade, minimo').eq('empresa_id', empresa_id).execute().data or []
+        pd_res = supabase.table('pedidos').select('status').eq('empresa_id', empresa_id).execute().data or []
         v_res = supabase.table('vendedores').select('id').eq('empresa_id', empresa_id).execute().data or []
         r_res = supabase.table('reunioes').select('id').eq('empresa_id', empresa_id).eq('status', 'agendada').execute().data or []
         
         total_produtos = len(p_res)
-        valor_total = sum(p['quantidade'] * p['preco'] for p in p_res)
         sem_estoque = sum(1 for p in p_res if p['quantidade'] <= 0)
         produtos_baixos = sum(1 for p in p_res if p['quantidade'] <= p.get('minimo', 0) and p['quantidade'] > 0)
+        pedidos_em_analise = sum(1 for p in pd_res if p.get('status') == 'em_analise')
         
         return {
             'total_produtos': total_produtos,
-            'valor_total': valor_total,
             'produtos_baixos': produtos_baixos,
             'sem_estoque': sem_estoque,
             'total_pedidos': len(pd_res),
-            'valor_pedidos': sum(p['total'] for p in pd_res),
+            'pedidos_em_analise': pedidos_em_analise,
             'total_vendedores': len(v_res),
             'reunioes_pendentes': len(r_res),
         }
     except Exception as e:
         print(f"Erro no dashboard: {e}")
         return {
-            'total_produtos': 0, 'valor_total': 0, 'produtos_baixos': 0, 'sem_estoque': 0,
-            'total_pedidos': 0, 'valor_pedidos': 0, 'total_vendedores': 0, 'reunioes_pendentes': 0
+            'total_produtos': 0, 'produtos_baixos': 0, 'sem_estoque': 0,
+            'total_pedidos': 0, 'pedidos_em_analise': 0, 'total_vendedores': 0, 'reunioes_pendentes': 0
         }
 
 # ═══════════════════════════════════════════

@@ -82,7 +82,7 @@ from supabase_db import (
     adicionar_estoque, retirar_estoque,
     criar_materia_prima, obter_materias_primas, atualizar_materia_prima, deletar_materia_prima,
     salvar_composicao_produto, calcular_materias_primas_produto,
-    adicionar_estoque_materia_prima, retirar_estoque_materia_prima,
+    adicionar_estoque_materia_prima, retirar_estoque_materia_prima, registrar_ordem_producao,
     criar_vendedor, obter_vendedores, deletar_vendedor,
     criar_pedido, obter_pedidos, obter_pedido_detalhado, atualizar_status_pedido, atualizar_pedido,
     analisar_pedidos_estoque,
@@ -157,7 +157,7 @@ def extrair_materia_prima(data):
     nome = (data.get('materia_prima_nome') or '').strip()
     quantidade = _to_float_safe(data.get('materia_prima_quantidade', 0))
     minimo = _to_float_safe(data.get('materia_prima_minimo', 0))
-    unidade = (data.get('materia_prima_unidade') or 'un').strip() or 'un'
+    unidade = (data.get('materia_prima_unidade') or 'kg').strip() or 'kg'
 
     if not nome and quantidade <= 0 and minimo <= 0:
         return None
@@ -213,7 +213,7 @@ def extrair_materias_produto(data):
         materias.append({
             'materia_prima_id': int(materia_id),
             'nome': (item.get('nome') or '').strip(),
-            'unidade': (item.get('unidade') or 'un').strip() or 'un',
+            'unidade': (item.get('unidade') or 'kg').strip() or 'kg',
             'tipo_calculo': tipo_calculo,
             'quantidade_por_produto': quantidade,
             'percentual': percentual if tipo_calculo == 'percentual' else 0,
@@ -714,9 +714,9 @@ def api_criar_materia_prima():
     r = criar_materia_prima(
         get_empresa_id(),
         data.get('nome', ''),
-        unidade=data.get('unidade', 'un'),
-        quantidade=_to_int_safe(data.get('quantidade', 0)),
-        minimo=_to_int_safe(data.get('minimo', 0)),
+        unidade=data.get('unidade', 'kg'),
+        quantidade=_to_float_safe(data.get('quantidade', 0)),
+        minimo=_to_float_safe(data.get('minimo', 0)),
         custo_unitario=_to_float_safe(data.get('custo_unitario', 0)),
         sku=data.get('sku', ''),
         descricao=data.get('descricao', '')
@@ -746,7 +746,7 @@ def api_deletar_materia_prima(mid):
 @login_required
 def api_entrada_materia_prima(mid):
     data = request.get_json(force=True, silent=True) or {}
-    qtd = _to_int_safe(data.get('quantidade', 0))
+    qtd = _to_float_safe(data.get('quantidade', 0))
     if qtd <= 0:
         return jsonify({'sucesso': False, 'mensagem': 'Quantidade deve ser positiva'}), 400
     r = adicionar_estoque_materia_prima(get_empresa_id(), mid, qtd, data.get('observacoes') or 'Entrada de matéria-prima')
@@ -759,13 +759,33 @@ def api_entrada_materia_prima(mid):
 @login_required
 def api_saida_materia_prima(mid):
     data = request.get_json(force=True, silent=True) or {}
-    qtd = _to_int_safe(data.get('quantidade', 0))
+    qtd = _to_float_safe(data.get('quantidade', 0))
     if qtd <= 0:
         return jsonify({'sucesso': False, 'mensagem': 'Quantidade deve ser positiva'}), 400
     r = retirar_estoque_materia_prima(get_empresa_id(), mid, qtd, data.get('observacoes') or 'Saída de matéria-prima')
     if not r.get('sucesso'):
         return jsonify(r), 400
     return jsonify(r)
+
+
+@app.route('/api/producao/ordem', methods=['POST'])
+@login_required
+def api_ordem_producao():
+    if session.get('empresa_tipo') != 'fornecedor':
+        return jsonify({'sucesso': False, 'mensagem': 'Apenas fornecedores podem registrar produção'}), 403
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        produto_id = int(data.get('produto_id'))
+    except Exception:
+        return jsonify({'sucesso': False, 'mensagem': 'Produto inválido'}), 400
+    r = registrar_ordem_producao(
+        get_empresa_id(),
+        produto_id,
+        _to_float_safe(data.get('quantidade', 0)),
+        observacoes=data.get('observacoes', ''),
+        data_producao=data.get('data_producao')
+    )
+    return jsonify(r), 200 if r.get('sucesso') else 400
 
 
 @app.route('/api/ia/materias-primas/calcular', methods=['POST'])
