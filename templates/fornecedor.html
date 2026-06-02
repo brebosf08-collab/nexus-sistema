@@ -1380,6 +1380,22 @@ async function registrarOrdemProducao(e){
     observacoes:(fd.get('observacoes')||'').trim()
   };
   try{
+    const analise=await api('/api/ia/materias-primas/calcular',{method:'POST',body:JSON.stringify({produto_id:data.produto_id,quantidade:data.quantidade})});
+    renderAnaliseProducao(analise,'ordem-analise');
+    if(!analise.pode_produzir){
+      setMsg('msg-ordem-producao','❌ Falta matéria-prima para essa produção. Veja a análise antes de confirmar.',false);
+      return;
+    }
+    const produtoNome=analise.produto?.nome||'produto';
+    const baixas=(analise.itens||[]).filter(i=>Number(i.quantidade_necessaria||0)>0);
+    const resumoBaixas=baixas.map(i=>`- ${Number(i.quantidade_necessaria||0).toLocaleString('pt-BR')} ${i.unidade||'kg'} de ${i.nome}`).join('\n');
+    const ok=confirm(
+      `Confirmar produção?\n\n`+
+      `Vai entrar: ${Number(data.quantidade||0).toLocaleString('pt-BR')} un. de ${produtoNome}\n\n`+
+      `Vai sair do estoque de matéria-prima:\n${resumoBaixas || '- Nenhuma matéria-prima'}\n\n`+
+      `Essa ação registra entrada do produto e saída das matérias-primas no histórico.`
+    );
+    if(!ok)return;
     const res=await api('/api/producao/ordem',{method:'POST',body:JSON.stringify(data)});
     setMsg('msg-ordem-producao','✅ '+(res.mensagem||'Produção registrada!'),true);
     renderAnaliseProducao(res.analise||{},'ordem-analise');
