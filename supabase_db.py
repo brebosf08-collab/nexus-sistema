@@ -42,6 +42,11 @@ def _parse_text_marker(descricao, marker, default=''):
     return descricao.split(marker, 1)[1].split('\n', 1)[0].strip()
 
 
+def _numero_db(valor, casas=3):
+    numero = float(valor or 0)
+    return int(numero) if numero.is_integer() else round(numero, casas)
+
+
 def _limpar_marcadores_descricao(descricao):
     linhas = []
     for linha in (descricao or '').splitlines():
@@ -106,8 +111,8 @@ def _normalizar_materia_prima_tabela(item):
     item = dict(item)
     item['tipo_item'] = 'materia_prima'
     item['unidade'] = item.get('unidade') or 'kg'
-    item['quantidade'] = float(item.get('quantidade') or 0)
-    item['minimo'] = float(item.get('minimo') or 0)
+    item['quantidade'] = _numero_db(item.get('quantidade') or 0)
+    item['minimo'] = _numero_db(item.get('minimo') or 0)
     item['custo_unitario'] = float(item.get('custo_unitario') or 0)
     item['custo'] = item['custo_unitario']
     return item
@@ -119,7 +124,7 @@ def registrar_historico_materia_prima(empresa_id, materia_id, tipo, quantidade, 
             'empresa_id': empresa_id,
             'materia_prima_id': materia_id,
             'tipo': tipo,
-            'quantidade': float(quantidade or 0),
+            'quantidade': _numero_db(quantidade),
             'observacoes': observacoes or ''
         }).execute()
         return {'sucesso': True}
@@ -382,8 +387,8 @@ def criar_materia_prima(empresa_id, nome, unidade='kg', quantidade=0, minimo=0, 
             "nome": nome.strip(),
             "sku": (sku or '').strip() or None,
             "unidade": (unidade or 'kg').strip() or 'kg',
-            "quantidade": float(quantidade or 0),
-            "minimo": float(minimo or 0),
+            "quantidade": _numero_db(quantidade),
+            "minimo": _numero_db(minimo),
             "custo_unitario": float(custo_unitario or 0),
             "descricao": (descricao or '').strip(),
         }
@@ -411,8 +416,8 @@ def atualizar_materia_prima(empresa_id, materia_id, dados):
             'sku': (dados.get('sku', atual_norm.get('sku')) or '').strip() or None,
             'unidade': (dados.get('unidade', atual_norm.get('unidade')) or 'kg').strip() or 'kg',
             'custo_unitario': float(dados.get('custo_unitario', atual_norm.get('custo_unitario', 0)) or 0),
-            'quantidade': float(dados.get('quantidade', atual_norm.get('quantidade', 0)) or 0),
-            'minimo': float(dados.get('minimo', atual_norm.get('minimo', 0)) or 0),
+            'quantidade': _numero_db(dados.get('quantidade', atual_norm.get('quantidade', 0)) or 0),
+            'minimo': _numero_db(dados.get('minimo', atual_norm.get('minimo', 0)) or 0),
             'descricao': dados.get('descricao', atual_norm.get('descricao', '')),
         }
         supabase.table('materias_primas').update(update_data).eq('id', materia_id).eq('empresa_id', empresa_id).execute()
@@ -426,7 +431,7 @@ def adicionar_estoque_materia_prima(empresa_id, materia_id, quantidade, observac
         r = supabase.table('materias_primas').select('quantidade').eq('id', materia_id).eq('empresa_id', empresa_id).execute()
         if not r.data:
             return {'sucesso': False, 'mensagem': 'Matéria-prima não encontrada'}
-        nova_qtd = float(r.data[0].get('quantidade') or 0) + float(quantidade)
+        nova_qtd = _numero_db(float(r.data[0].get('quantidade') or 0) + float(quantidade))
         supabase.table('materias_primas').update({'quantidade': nova_qtd}).eq('id', materia_id).eq('empresa_id', empresa_id).execute()
         registrar_historico_materia_prima(empresa_id, materia_id, 'entrada', quantidade, observacoes or 'Entrada de matéria-prima')
         return {'sucesso': True, 'nova_quantidade': nova_qtd}
@@ -443,7 +448,7 @@ def retirar_estoque_materia_prima(empresa_id, materia_id, quantidade, observacoe
         quantidade = float(quantidade or 0)
         if atual < quantidade:
             return {'sucesso': False, 'mensagem': 'Estoque insuficiente'}
-        nova_qtd = atual - quantidade
+        nova_qtd = _numero_db(atual - quantidade)
         supabase.table('materias_primas').update({'quantidade': nova_qtd}).eq('id', materia_id).eq('empresa_id', empresa_id).execute()
         registrar_historico_materia_prima(empresa_id, materia_id, 'saida', quantidade, observacoes or 'Saída de matéria-prima')
         return {'sucesso': True, 'nova_quantidade': nova_qtd}
@@ -480,8 +485,8 @@ def salvar_composicao_produto(empresa_id, produto_id, materias):
                     'produto_id': produto_id,
                     'materia_prima_id': int(mid),
                     'tipo_calculo': tipo_calculo,
-                    'quantidade_por_produto': qtd,
-                    'percentual': percentual if tipo_calculo == 'percentual' else 0,
+                    'quantidade_por_produto': _numero_db(qtd),
+                    'percentual': _numero_db(percentual if tipo_calculo == 'percentual' else 0),
                 })
         if rows:
             try:
@@ -492,7 +497,7 @@ def salvar_composicao_produto(empresa_id, produto_id, materias):
                         'empresa_id': r['empresa_id'],
                         'produto_id': r['produto_id'],
                         'materia_prima_id': r['materia_prima_id'],
-                        'quantidade_por_produto': r['percentual'] if r['tipo_calculo'] == 'percentual' else r['quantidade_por_produto'],
+                        'quantidade_por_produto': _numero_db(r['percentual'] if r['tipo_calculo'] == 'percentual' else r['quantidade_por_produto']),
                     }
                     for r in rows
                 ]
