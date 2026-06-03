@@ -407,6 +407,16 @@ def api_registrar():
         return jsonify({'sucesso': False, 'mensagem': 'E-mail e Senha são obrigatórios'}), 400
     if len(senha) < 6:
         return jsonify({'sucesso': False, 'mensagem': 'A senha deve ter pelo menos 6 caracteres'}), 400
+    if not (
+        any(c.islower() for c in senha)
+        and any(c.isupper() for c in senha)
+        and any(c.isdigit() for c in senha)
+        and any(not c.isalnum() for c in senha)
+    ):
+        return jsonify({
+            'sucesso': False,
+            'mensagem': 'A senha precisa ter letra maiúscula, letra minúscula, número e símbolo. Exemplo: Sistema@123'
+        }), 400
 
     r = registrar_empresa(nome_empresa, documento, tipo_documento, tipo, endereco, telefone, email, senha)
     if not r.get('sucesso'):
