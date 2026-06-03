@@ -419,7 +419,7 @@
           <div class="field"><label>Tipo *</label><select id="saida-tipo" name="tipo" onchange="atualizarSelectSaida()" required><option value="produto">Produto</option><option value="materia">Matéria-prima</option></select></div>
           <div class="field"><label>Item *</label><select id="saida-item-id" name="item_id" required><option value="">Carregando...</option></select></div>
           <div class="field"><label>Quantidade *</label><input name="quantidade" type="number" step="0.001" min="0.001" required placeholder="Ex: 1"></div>
-          <div class="field"><label>Motivo *</label><select name="motivo" required><option value="venda">Venda</option><option value="consumo interno">Consumo interno</option><option value="evento">Evento</option><option value="doação">Doação</option><option value="ajuste">Ajuste</option></select></div>
+          <div class="field"><label>Motivo *</label><select name="motivo" required><option value="venda">Venda</option><option value="consumo interno">Consumo interno</option><option value="uso na fábrica">Uso na fábrica</option><option value="prova/teste">Prova/Teste</option><option value="evento">Evento</option><option value="doação">Doação</option><option value="validade">Validade vencida</option><option value="avaria">Avaria/Perda</option><option value="ajuste">Ajuste</option></select></div>
           <div class="field full"><label>Observações</label><textarea name="observacoes" placeholder="Ex: pedido, evento, responsável, motivo detalhado..."></textarea></div>
         </div>
         <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Registrar Saída</button>
@@ -1689,7 +1689,7 @@ async function loadAnalisePedidos(){
       const materias=faltasMateria.length
         ? faltasMateria.map(i=>`<div><b>${escapeHtml(i.nome)}</b>: falta ${qtd(i.falta_materia_prima,i.unidade)} · precisa ${qtd(i.quantidade_necessaria,i.unidade)} · tem ${qtd(i.quantidade_disponivel,i.unidade)}</div>`).join('')
         : '<div style="color:var(--green)">Matérias-primas suficientes para os itens analisados.</div>';
-      const motivo=String(p.observacoes||'').includes('[ANALISE_PEDIDO]')
+      const motivo=!p.pode_atender&&String(p.observacoes||'').includes('[ANALISE_PEDIDO]')
         ? String(p.observacoes||'').split('[ANALISE_PEDIDO]',2)[1].trim()
         : '';
       return `

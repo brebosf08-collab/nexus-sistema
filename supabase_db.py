@@ -816,6 +816,57 @@ def analisar_pedidos_estoque(empresa_id):
 
 
 MATERIA_PEDIDO_BAIXADA_MARKER = '[MATERIA_PRIMA_BAIXADA]'
+PRODUTO_PEDIDO_BAIXADO_MARKER = '[PRODUTO_PEDIDO_BAIXADO]'
+
+
+def baixar_produtos_do_pedido(empresa_id, pedido_id):
+    try:
+        pedido_res = supabase.table('pedidos').select('id, cliente_nome, observacoes').eq('id', pedido_id).eq('empresa_id', empresa_id).execute()
+        if not pedido_res.data:
+            return {'sucesso': False, 'mensagem': 'Pedido não encontrado.'}
+
+        pedido = pedido_res.data[0]
+        observacoes = pedido.get('observacoes') or ''
+        if PRODUTO_PEDIDO_BAIXADO_MARKER in observacoes:
+            return {'sucesso': True, 'mensagem': 'Produtos já baixados para este pedido.'}
+
+        itens = supabase.table('itens_pedido').select('produto_id, quantidade, produtos(nome, quantidade)').eq('pedido_id', pedido_id).execute().data or []
+        if not itens:
+            return {'sucesso': True, 'mensagem': 'Pedido sem itens para baixa de produto.'}
+
+        faltantes = []
+        for item in itens:
+            produto = item.get('produtos') or {}
+            pedido_qtd = int(item.get('quantidade') or 0)
+            atual = int(produto.get('quantidade') or 0)
+            if atual < pedido_qtd:
+                faltantes.append(
+                    f"{produto.get('nome') or 'Produto'}: pedido {pedido_qtd} un., disponível {atual} un."
+                )
+
+        if faltantes:
+            return {'sucesso': False, 'mensagem': 'Estoque insuficiente de produto pronto: ' + '; '.join(faltantes)}
+
+        for item in itens:
+            produto_id = int(item.get('produto_id'))
+            produto = item.get('produtos') or {}
+            pedido_qtd = int(item.get('quantidade') or 0)
+            atual = int(produto.get('quantidade') or 0)
+            nova_qtd = atual - pedido_qtd
+            supabase.table('produtos').update({'quantidade': nova_qtd}).eq('id', produto_id).eq('empresa_id', empresa_id).execute()
+            supabase.table('historico').insert({
+                "empresa_id": empresa_id,
+                "produto_id": produto_id,
+                "tipo": 'saida',
+                "quantidade": pedido_qtd,
+                "observacoes": f"Venda - Pedido #{pedido_id} - {pedido.get('cliente_nome') or 'Cliente'}"
+            }).execute()
+
+        nova_obs = f"{observacoes}\n{PRODUTO_PEDIDO_BAIXADO_MARKER}".strip()
+        supabase.table('pedidos').update({'observacoes': nova_obs}).eq('id', pedido_id).eq('empresa_id', empresa_id).execute()
+        return {'sucesso': True, 'mensagem': 'Produtos baixados do estoque.'}
+    except Exception as e:
+        return {'sucesso': False, 'mensagem': str(e)}
 
 
 def baixar_materias_primas_do_pedido(empresa_id, pedido_id):
@@ -1064,21 +1115,6 @@ def criar_pedido(empresa_id, cliente_nome, data, itens, vendedor_id=None, observ
                 "preco_unitario": float(item['preco']),
                 "subtotal": float(item['subtotal'])
             }).execute()
-            
-            # Atualizar estoque
-            r = supabase.table('produtos').select('quantidade').eq('id', item['produto_id']).eq('empresa_id', empresa_id).execute()
-            if r.data:
-                qtd_saida = min(int(r.data[0]['quantidade'] or 0), int(item['quantidade']))
-                nova_qtd = int(r.data[0]['quantidade'] or 0) - qtd_saida
-                supabase.table('produtos').update({'quantidade': nova_qtd}).eq('id', item['produto_id']).eq('empresa_id', empresa_id).execute()
-                if qtd_saida > 0:
-                    supabase.table('historico').insert({
-                        "empresa_id": empresa_id,
-                        "produto_id": item['produto_id'],
-                        "tipo": 'saida',
-                        "quantidade": qtd_saida,
-                        "observacoes": f'Pedido #{pedido_id} - {cliente_nome}'
-                    }).execute()
 
         if motivos:
             try:
@@ -1131,7 +1167,7 @@ def obter_pedido_detalhado(empresa_id, pedido_id):
 def atualizar_status_pedido(empresa_id, pedido_id, status):
     try:
         if status == 'confirmado':
-            baixa = baixar_materias_primas_do_pedido(empresa_id, pedido_id)
+            baixa = baixar_produtos_do_pedido(empresa_id, pedido_id)
             if not baixa.get('sucesso'):
                 return baixa
 
@@ -1147,7 +1183,7 @@ def atualizar_pedido(empresa_id, pedido_id, dados):
         return {'sucesso': False, 'mensagem': 'Nada para atualizar'}
     try:
         if atualizacoes.get('status') == 'confirmado':
-            baixa = baixar_materias_primas_do_pedido(empresa_id, pedido_id)
+            baixa = baixar_produtos_do_pedido(empresa_id, pedido_id)
             if not baixa.get('sucesso'):
                 return baixa
 
