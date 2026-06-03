@@ -1680,15 +1680,23 @@ async function loadAnalisePedidos(){
     const cards=pedidos.map(p=>{
       const faltasProduto=p.faltas_produtos||[];
       const faltasMateria=p.faltas_materias_primas||[];
+      const produtosPedido=p.produtos||[];
+      const materiasPedido=p.materias_primas||[];
       const status=p.pode_atender
         ? '<span class="badge badge-ok">Pode atender</span>'
         : '<span class="badge badge-zero">Precisa ajustar</span>';
-      const produtos=faltasProduto.length
-        ? faltasProduto.map(i=>`<div><b>${escapeHtml(i.nome)}</b>: falta ${qtd(i.falta_produto,'un')} de ${qtd(i.quantidade_pedido,'un')}</div>`).join('')
-        : '<div style="color:var(--green)">Produtos prontos suficientes.</div>';
-      const materias=faltasMateria.length
-        ? faltasMateria.map(i=>`<div><b>${escapeHtml(i.nome)}</b>: falta ${qtd(i.falta_materia_prima,i.unidade)} · precisa ${qtd(i.quantidade_necessaria,i.unidade)} · tem ${qtd(i.quantidade_disponivel,i.unidade)}</div>`).join('')
-        : '<div style="color:var(--green)">Matérias-primas suficientes para os itens analisados.</div>';
+      const produtos=produtosPedido.length
+        ? produtosPedido.map(i=>{
+            const saldo=Number(i.estoque_atual||0)-Number(i.quantidade_pedido||0);
+            return `<div><b>${escapeHtml(i.nome)}</b>: pedido ${qtd(i.quantidade_pedido,'un')} · estoque ${qtd(i.estoque_atual,'un')} · saldo ${qtd(saldo,'un')} ${i.suficiente?'<span class="badge badge-ok">OK</span>':'<span class="badge badge-zero">Falta</span>'}</div>`;
+          }).join('')
+        : '<div style="color:var(--muted)">Pedido sem produto listado.</div>';
+      const materias=materiasPedido.length
+        ? materiasPedido.map(i=>{
+            const saldo=Number(i.saldo_apos_pedido||0);
+            return `<div><b>${escapeHtml(i.nome)}</b>: precisa ${qtd(i.quantidade_necessaria,i.unidade)} · estoque ${qtd(i.quantidade_disponivel,i.unidade)} · saldo ${qtd(saldo,i.unidade)} ${i.suficiente?'<span class="badge badge-ok">OK</span>':'<span class="badge badge-zero">Falta</span>'}</div>`;
+          }).join('')
+        : '<div style="color:var(--muted)">Produtos sem composição de matéria-prima cadastrada.</div>';
       const motivo=!p.pode_atender&&String(p.observacoes||'').includes('[ANALISE_PEDIDO]')
         ? String(p.observacoes||'').split('[ANALISE_PEDIDO]',2)[1].trim()
         : '';
