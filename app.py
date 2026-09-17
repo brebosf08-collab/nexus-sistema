@@ -641,15 +641,16 @@ def api_criar_produto():
     if produto_id and materias_produto:
         salvar_composicao_produto(empresa_id, produto_id, materias_produto)
 
-    if resultado.get('sucesso') and NOTIFICACOES_MODULO_CARREGADO:
+    if resultado.get('sucesso'):
         try:
-            criar_notif_nova(
+            criar_aviso(
                 empresa_id,
+                'produto',
                 '✓ Produto Cadastrado',
                 f"Novo produto '{dados_produto.get('nome')}' cadastrado com sucesso",
-                tipo='sucesso'
+                'normal'
             )
-        except:
+        except Exception:
             pass
 
     return jsonify(resultado), 201
@@ -878,13 +879,14 @@ def api_criar_produto_v2():
     
     if resultado.get('sucesso'):
         try:
-            criar_notif_nova(
+            criar_aviso(
                 empresa_id,
+                'produto',
                 '✓ Produto Cadastrado',
                 f"Novo produto '{dados_produto.get('nome')}' foi cadastrado com sucesso",
-                tipo='sucesso'
+                'normal'
             )
-        except:
+        except Exception:
             pass
         
         return jsonify(resultado), 201
@@ -911,13 +913,14 @@ def api_atualizar_estoque_v2(pid):
     
     if resultado.get('sucesso'):
         try:
-            criar_notif_nova(
+            criar_aviso(
                 get_empresa_id(),
+                'estoque',
                 '📦 Estoque Atualizado',
                 f"Estoque atualizado: {motivo}",
-                tipo='info'
+                'normal'
             )
-        except:
+        except Exception:
             pass
     
     return jsonify(resultado), 200 if resultado.get('sucesso') else 400
@@ -1217,13 +1220,14 @@ def api_checkout():
     
     if resultado.get('sucesso'):
         try:
-            criar_notif_nova(
+            criar_aviso(
                 fornecedor_id,
+                'pedido',
                 '🛒 Novo Pedido Recebido',
                 f"Novo pedido #{resultado.get('pedido_id')} - Total: R$ {resultado.get('total'):.2f}",
-                tipo='sucesso'
+                'alta'
             )
-        except:
+        except Exception:
             pass
     
     status = 201 if resultado.get('sucesso') else 400
@@ -1658,13 +1662,14 @@ def api_criar_agendamento():
     
     if resultado.get('sucesso'):
         try:
-            criar_notif_nova(
+            criar_aviso(
                 get_empresa_id(),
+                'agendamento',
                 '📅 Agendamento Criado',
                 f"Agendamento: {data.get('titulo')} em {data.get('data')}",
-                tipo='info'
+                'normal'
             )
-        except:
+        except Exception:
             pass
         
         return jsonify(resultado), 201
@@ -1717,13 +1722,14 @@ def api_concluir_agendamento(agenda_id):
     
     if resultado.get('sucesso'):
         try:
-            criar_notif_nova(
+            criar_aviso(
                 get_empresa_id(),
+                'agendamento',
                 '✓ Agendamento Concluído',
                 f"Agendamento #{agenda_id} foi concluído",
-                tipo='sucesso'
+                'normal'
             )
-        except:
+        except Exception:
             pass
     
     return jsonify(resultado), 200 if resultado.get('sucesso') else 400
