@@ -32,7 +32,8 @@ def _parse_json_marker(descricao, marker, default):
     payload = descricao.split(marker, 1)[1].split('\n', 1)[0].strip()
     try:
         return json.loads(payload)
-    except Exception:
+    except Exception as e:
+        print(f"Erro em _parse_json_marker: {e}")
         return default
 
 
@@ -157,7 +158,8 @@ def _carregar_composicoes_produtos(empresa_id, produtos):
         for p in produtos:
             if por_produto.get(p.get('id')):
                 p['materias_primas'] = por_produto[p.get('id')]
-    except Exception:
+    except Exception as e:
+        print(f"Erro em _carregar_composicoes_produtos: {e}")
         # Tabelas novas ainda não existem; usa composição guardada na descrição.
         pass
     return produtos
@@ -257,7 +259,8 @@ def obter_empresa(empresa_id):
     try:
         res = supabase.table('empresas').select('*').eq('id', empresa_id).execute()
         return res.data[0] if res.data else None
-    except:
+    except Exception as e:
+        print(f"Erro em obter_empresa: {e}")
         return None
 
 # ═══════════════════════════════════════════
@@ -288,7 +291,8 @@ def obter_categorias(empresa_id):
     try:
         res = supabase.table('categorias').select('*').eq('empresa_id', empresa_id).order('nome').execute()
         return res.data
-    except:
+    except Exception as e:
+        print(f"Erro em obter_categorias: {e}")
         return []
 
 def deletar_categoria(empresa_id, categoria_id):
@@ -362,7 +366,8 @@ def obter_produto(empresa_id, produto_id):
     try:
         res = supabase.table('produtos').select('*').eq('id', produto_id).eq('empresa_id', empresa_id).execute()
         return _normalizar_materia_prima(res.data[0]) if res.data else None
-    except:
+    except Exception as e:
+        print(f"Erro em obter_produto: {e}")
         return None
 
 
@@ -654,7 +659,8 @@ def _calcular_faltas_materias_itens(empresa_id, itens):
         composicoes = supabase.table('produto_materias_primas').select(
             'produto_id, materia_prima_id, quantidade_por_produto, tipo_calculo, percentual, materias_primas(nome, unidade, quantidade), produtos(nome)'
         ).eq('empresa_id', empresa_id).in_('produto_id', produto_ids).execute().data or []
-    except Exception:
+    except Exception as e:
+        print(f"Erro em _calcular_faltas_materias_itens: {e}")
         composicoes = supabase.table('produto_materias_primas').select(
             'produto_id, materia_prima_id, quantidade_por_produto, materias_primas(nome, unidade, quantidade), produtos(nome)'
         ).eq('empresa_id', empresa_id).in_('produto_id', produto_ids).execute().data or []
@@ -1021,7 +1027,8 @@ def obter_vendedores(empresa_id):
     try:
         res = supabase.table('vendedores').select('*').eq('empresa_id', empresa_id).order('nome').execute()
         return res.data
-    except:
+    except Exception as e:
+        print(f"Erro em obter_vendedores: {e}")
         return []
 
 def deletar_vendedor(empresa_id, vendedor_id):
@@ -1148,7 +1155,8 @@ def obter_pedidos(empresa_id=None, cliente_id=None):
             for p in ps:
                 p['vendedor_nome'] = p.get('vendedores', {}).get('nome', '') if p.get('vendedores') else ''
             return ps
-    except:
+    except Exception as e:
+        print(f"Erro em obter_pedidos: {e}")
         return []
 
 def obter_pedido_detalhado(empresa_id, pedido_id):
@@ -1161,7 +1169,8 @@ def obter_pedido_detalhado(empresa_id, pedido_id):
         for i in itens:
             i['produto_nome'] = i.get('produtos', {}).get('nome', '') if i.get('produtos') else ''
         return {'pedido': pedido, 'itens': itens}
-    except:
+    except Exception as e:
+        print(f"Erro em obter_pedido_detalhado: {e}")
         return None
 
 def atualizar_status_pedido(empresa_id, pedido_id, status):
@@ -1210,7 +1219,8 @@ def obter_historico(empresa_id, filtro_tipo=None, data_inicio=None, data_fim=Non
         for h in hs:
             h['produto_nome'] = h.get('produtos', {}).get('nome', '') if h.get('produtos') else ''
             historico.append(h)
-    except:
+    except Exception as e:
+        print(f"Erro em obter_historico: {e}")
         pass
 
     try:
@@ -1224,7 +1234,8 @@ def obter_historico(empresa_id, filtro_tipo=None, data_inicio=None, data_fim=Non
             h['observacoes'] = h.get('observacoes') or 'Movimentação de matéria-prima'
             h['origem'] = 'materia_prima'
             historico.append(h)
-    except:
+    except Exception as e:
+        print(f"Erro em obter_historico: {e}")
         pass
 
     return sorted(historico, key=lambda h: h.get('data_hora') or '', reverse=True)
@@ -1239,7 +1250,8 @@ def criar_reuniao(empresa_id, titulo, descricao, data_hora, local_r='', particip
 def obter_reunioes(empresa_id):
     try:
         return supabase.table('reunioes').select('*').eq('empresa_id', empresa_id).order('data_hora', desc=True).execute().data
-    except:
+    except Exception as e:
+        print(f"Erro em obter_reunioes: {e}")
         return []
 
 def atualizar_status_reuniao(empresa_id, reuniao_id, status):
@@ -1266,7 +1278,8 @@ def criar_contato(empresa_id, nome, documento='', email='', telefone='', enderec
 def obter_contatos(empresa_id):
     try:
         return supabase.table('contatos').select('*').eq('empresa_id', empresa_id).order('nome').execute().data
-    except:
+    except Exception as e:
+        print(f"Erro em obter_contatos: {e}")
         return []
 
 def deletar_contato(empresa_id, contato_id):
@@ -1335,7 +1348,8 @@ def obter_avisos(empresa_id, nao_lidos_somente=False):
             q = q.eq('lido', False)
         res = q.order('data_criacao', desc=True).execute()
         return res.data
-    except:
+    except Exception as e:
+        print(f"Erro em obter_avisos: {e}")
         return []
 
 def contar_avisos_nao_lidos(empresa_id):
@@ -1343,7 +1357,8 @@ def contar_avisos_nao_lidos(empresa_id):
     try:
         res = supabase.table('avisos').select('id', count='exact').eq('empresa_id', empresa_id).eq('lido', False).execute()
         return res.count or 0
-    except:
+    except Exception as e:
+        print(f"Erro em contar_avisos_nao_lidos: {e}")
         return 0
 
 def marcar_aviso_lido(empresa_id, aviso_id):
@@ -1392,7 +1407,8 @@ def obter_perfil_loja(empresa_id):
     try:
         res = supabase.table('perfil_loja').select('*').eq('empresa_id', empresa_id).execute()
         return res.data[0] if res.data else None
-    except:
+    except Exception as e:
+        print(f"Erro em obter_perfil_loja: {e}")
         return None
 
 def listar_fornecedores():
@@ -1400,7 +1416,8 @@ def listar_fornecedores():
     try:
         res = supabase.table('empresas').select('id, nome, tipo, telefone, email, endereco').eq('tipo', 'fornecedor').order('nome').execute()
         return res.data
-    except:
+    except Exception as e:
+        print(f"Erro em listar_fornecedores: {e}")
         return []
 
 def listar_clientes():
@@ -1408,7 +1425,8 @@ def listar_clientes():
     try:
         res = supabase.table('empresas').select('id, nome, tipo, telefone, email, endereco').eq('tipo', 'cliente').order('nome').execute()
         return res.data
-    except:
+    except Exception as e:
+        print(f"Erro em listar_clientes: {e}")
         return []
 
 # ═══════════════════════════════════════════
@@ -1440,7 +1458,8 @@ def obter_notificacoes(empresa_id, nao_lidas_somente=False):
             query = query.eq('lida', False)
         res = query.order('criado_em', desc=True).execute()
         return res.data or []
-    except:
+    except Exception as e:
+        print(f"Erro em obter_notificacoes: {e}")
         return []
 
 def marcar_notificacao_lida(empresa_id, notificacao_id):
@@ -1464,7 +1483,8 @@ def contar_notificacoes_nao_lidas(empresa_id):
     try:
         res = supabase.table('notificacoes').select('id', count='exact').eq('cliente_id', empresa_id).eq('lida', False).execute()
         return res.count or 0
-    except:
+    except Exception as e:
+        print(f"Erro em contar_notificacoes_nao_lidas: {e}")
         return 0
 
 # ═══════════════════════════════════════════
@@ -1530,7 +1550,8 @@ def registrar_visita_vitrine(fornecedor_id, cliente_id):
         }
         supabase.table('visitantes_vitrine').insert(data).execute()
         return {'sucesso': True}
-    except:
+    except Exception as e:
+        print(f"Erro em registrar_visita_vitrine: {e}")
         pass  # Não interrompe se falhar
 
 def obter_visitantes_vitrine(fornecedor_id):
@@ -1545,7 +1566,8 @@ def obter_visitantes_vitrine(fornecedor_id):
                 vis['visitado_em'] = item['visitado_em']
                 visitantes.append(vis)
         return visitantes
-    except:
+    except Exception as e:
+        print(f"Erro em obter_visitantes_vitrine: {e}")
         return []
 
 # ═══════════════════════════════════════════
