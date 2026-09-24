@@ -157,6 +157,7 @@
         </div>
         <div id="p-composicao" style="margin-top:16px">
           <label class="field-label">Composição — matérias-primas usadas por unidade do produto</label>
+          <div id="p-composicao-aviso" style="display:none;color:var(--mostarda);font-size:12.5px;margin-bottom:10px">⚠️ Nenhuma matéria-prima cadastrada ainda — cadastre em "Matérias-primas" antes de montar a composição. Você ainda pode cadastrar o produto sem composição e adicionar depois.</div>
           <div id="p-composicao-lista"></div>
           <button class="btn secondary small" style="margin-top:4px" onclick="adicionarLinhaComposicao()">+ Adicionar matéria-prima</button>
         </div>
@@ -323,6 +324,10 @@ function atualizarBadgeAvisos(avisos){
 
 // ---------- PRODUTOS ----------
 function adicionarLinhaComposicao(){
+  if(!materiasCache.length){
+    toast('Cadastre ao menos uma matéria-prima antes (aba "Matérias-primas") para poder montar a composição.');
+    return;
+  }
   const div = document.createElement('div');
   div.className = 'composicao-item';
   div.innerHTML = `
@@ -358,6 +363,7 @@ async function cadastrarProduto(){
 
 async function carregarProdutos(){
   if(!materiasCache.length){ try{ materiasCache = await api('/api/materias-primas'); }catch(e){} }
+  document.getElementById('p-composicao-aviso').style.display = materiasCache.length ? 'none' : 'block';
   try{
     produtosCache = await api('/api/produtos');
     const tbody = document.querySelector('#tabela-produtos tbody');
