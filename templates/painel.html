@@ -165,7 +165,7 @@
       </div>
       <div class="box">
         <h3>Produtos cadastrados</h3>
-        <table id="tabela-produtos"><thead><tr><th>Nome</th><th>Preço</th><th>Estoque</th><th>Composição</th><th></th></tr></thead><tbody></tbody></table>
+        <table id="tabela-produtos"><thead><tr><th>Nome</th><th>Preço</th><th>Estoque</th><th>Custo/unidade</th><th></th></tr></thead><tbody></tbody></table>
       </div>
     </section>
 
@@ -369,17 +369,62 @@ async function carregarProdutos(){
     const tbody = document.querySelector('#tabela-produtos tbody');
     if(!produtosCache.length){ tbody.innerHTML = '<tr><td colspan="5" class="empty">Nenhum produto cadastrado ainda.</td></tr>'; return; }
     tbody.innerHTML = produtosCache.map(p=>{
-      const comp = (p.produto_materias_primas||[]).map(c=>`${c.materias_primas?.nome||'?'}: ${c.quantidade_necessaria}${c.materias_primas?.unidade||''}`).join(', ') || '—';
+      const composicao = p.produto_materias_primas || [];
+      const custoUnidade = composicao.reduce((soma,c)=> soma + (c.quantidade_necessaria * (c.materias_primas?.custo_unitario||0)), 0);
+      const custoTexto = composicao.length ? `R$ ${custoUnidade.toFixed(2)}` : '—';
       const precoTexto = p.preco ? `R$ ${Number(p.preco).toFixed(2)}` : '—';
+      const temFicha = composicao.length > 0;
       return `<tr>
         <td>${p.nome}</td>
         <td>${precoTexto}</td>
         <td>${p.estoque_atual} ${p.unidade}</td>
-        <td style="font-size:12px;color:var(--muted)">${comp}</td>
-        <td><button class="btn danger small" onclick="excluirProduto('${p.id}')">Excluir</button></td>
-      </tr>`;
+        <td>${custoTexto}</td>
+        <td style="display:flex;gap:6px">
+          ${temFicha ? `<button class="btn secondary small" onclick="alternarFicha('${p.id}')">Ver cálculo</button>` : ''}
+          <button class="btn danger small" onclick="excluirProduto('${p.id}')">Excluir</button>
+        </td>
+      </tr>
+      <tr id="ficha-${p.id}" style="display:none"><td colspan="5">${temFicha ? montarFichaTecnica(p, custoUnidade) : ''}</td></tr>`;
     }).join('');
   }catch(e){ toast('Erro ao carregar produtos: '+e.message); }
+}
+
+function alternarFicha(produtoId){
+  const linha = document.getElementById('ficha-'+produtoId);
+  if(linha) linha.style.display = linha.style.display==='none' ? 'table-row' : 'none';
+}
+
+function montarFichaTecnica(produto, custoUnidade){
+  const itens = produto.produto_materias_primas || [];
+  // Quantas unidades dá pra fazer agora: o ingrediente mais escasso manda (estoque disponível ÷ quanto ele usa por unidade)
+  let limiteUnidades = Infinity;
+  const linhas = itens.map(c=>{
+    const materia = c.materias_primas || {};
+    const custoItem = c.quantidade_necessaria * (materia.custo_unitario||0);
+    const daPraFazer = c.quantidade_necessaria > 0 ? Math.floor((materia.estoque_atual||0) / c.quantidade_necessaria) : 0;
+    limiteUnidades = Math.min(limiteUnidades, daPraFazer);
+    return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+      <span>${materia.nome||'?'} — ${c.quantidade_necessaria}${materia.unidade||''} por unidade</span>
+      <span style="color:var(--muted)">R$ ${custoItem.toFixed(2)} · estoque dá pra ${daPraFazer} un.</span>
+    </div>`;
+  }).join('');
+
+  const preco = Number(produto.preco)||0;
+  const margem = preco > 0 ? preco - custoUnidade : null;
+  const margemPct = (margem!==null && custoUnidade>0) ? (margem/preco*100) : null;
+
+  return `
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px;margin:6px 0">
+      <div style="font-weight:600;font-size:13.5px;margin-bottom:8px">Ficha técnica — ${produto.nome}</div>
+      ${linhas}
+      <div style="display:flex;justify-content:space-between;padding-top:10px;font-size:13.5px;font-weight:600">
+        <span>Custo por unidade</span><span>R$ ${custoUnidade.toFixed(2)}</span>
+      </div>
+      ${margem!==null ? `<div style="display:flex;justify-content:space-between;font-size:13px;color:${margem>=0?'var(--sauge)':'var(--tijolo)'}">
+        <span>Margem por unidade (venda R$ ${preco.toFixed(2)})</span><span>R$ ${margem.toFixed(2)} ${margemPct!==null?`(${margemPct.toFixed(0)}%)`:''}</span>
+      </div>` : `<div style="font-size:12px;color:var(--muted);padding-top:4px">Defina um preço de venda pra ver a margem.</div>`}
+      <div style="font-size:13px;color:var(--muted);padding-top:6px">Com o estoque de matéria-prima de hoje, dá pra produzir até <b style="color:var(--text)">${limiteUnidades===Infinity?0:limiteUnidades} unidades</b>.</div>
+    </div>`;
 }
 
 async function excluirProduto(id){

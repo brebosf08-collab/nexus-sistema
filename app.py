@@ -273,8 +273,10 @@ def api_excluir_materia(materia_id):
 @login_required
 def api_listar_produtos():
     try:
-        res = supabase.table("produtos").select("*, produto_materias_primas(id, materia_prima_id, quantidade_necessaria, materias_primas(nome, unidade))") \
-            .eq("empresa_id", empresa_id()).order("nome").execute()
+        res = supabase.table("produtos").select(
+            "*, produto_materias_primas(id, materia_prima_id, quantidade_necessaria, "
+            "materias_primas(nome, unidade, custo_unitario, estoque_atual))"
+        ).eq("empresa_id", empresa_id()).order("nome").execute()
         return jsonify(res.data)
     except Exception as e:
         log_erro("api_listar_produtos", e)
