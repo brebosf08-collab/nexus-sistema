@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus Fábrica — Painel</title>
+<style>
+  :root{--bg:#0f1117;--card:#171a24;--card2:#1d2130;--border:#262a38;--text:#e8e9ee;--muted:#8a8fa3;--accent:#6366f1;--accent2:#818cf8;--danger:#ef4444;--ok:#22c55e;--warn:#f59e0b}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:10}
+  .topbar h1{font-size:18px;margin:0}
+  .topbar .right{display:flex;align-items:center;gap:14px;font-size:13px;color:var(--muted)}
+  .topbar a{color:var(--muted);text-decoration:none}
+  nav{display:flex;gap:4px;padding:10px 16px;overflow-x:auto;border-bottom:1px solid var(--border)}
+  nav button{white-space:nowrap;padding:9px 14px;border-radius:8px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:13.5px;position:relative}
+  nav button.active{background:var(--card2);color:var(--text)}
+  nav button .badge{background:var(--danger);color:#fff;font-size:10px;padding:1px 5px;border-radius:8px;margin-left:5px}
+  main{padding:20px;max-width:1100px;margin:0 auto}
+  .sec{display:none}
+  .sec.active{display:block}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px}
+  .kpi{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+  .kpi .n{font-size:26px;font-weight:700}
+  .kpi .l{font-size:12px;color:var(--muted);margin-top:2px}
+  .kpi.warn .n{color:var(--warn)}
+  .kpi.danger .n{color:var(--danger)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th{text-align:left;color:var(--muted);font-weight:500;padding:8px;border-bottom:1px solid var(--border);font-size:12px;text-transform:uppercase}
+  td{padding:10px 8px;border-bottom:1px solid var(--border)}
+  tr:hover td{background:var(--card2)}
+  .box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:18px}
+  .box h3{margin:0 0 14px;font-size:15px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  input,select{padding:9px 10px;border-radius:8px;border:1px solid var(--border);background:#0f1117;color:var(--text);font-size:13.5px}
+  button.btn{padding:9px 16px;border:none;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer;font-size:13.5px;font-weight:600}
+  button.btn:hover{background:var(--accent2)}
+  button.btn.secondary{background:var(--card2);color:var(--text);border:1px solid var(--border)}
+  button.btn.danger{background:var(--danger)}
+  button.btn.small{padding:5px 10px;font-size:12px}
+  .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+  .pill.ok{background:#12301c;color:#7ee8a3}
+  .pill.warn{background:#3a2c0f;color:#ffcf7a}
+  .pill.danger{background:#3a1a1a;color:#ff8b8b}
+  .empty{color:var(--muted);font-size:13.5px;padding:20px;text-align:center}
+  .composicao-item{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .toast{position:fixed;bottom:20px;right:20px;background:var(--card2);border:1px solid var(--border);padding:12px 18px;border-radius:10px;font-size:13.5px;display:none;max-width:320px;z-index:100}
+  .toast.show{display:block}
+  .aviso-item{padding:12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:10px}
+  .aviso-item.nao-lido{background:rgba(99,102,241,0.06)}
+  .aviso-item .t{font-weight:600;font-size:13.5px}
+  .aviso-item .m{color:var(--muted);font-size:12.5px;margin-top:2px}
+  .aviso-item .quando{color:var(--muted);font-size:11px;white-space:nowrap}
+  select[multiple]{height:auto}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>🏭 Nexus Fábrica</h1>
+  <div class="right">
+    <span>{{ empresa_nome }}</span>
+    <a href="/logout">Sair</a>
+  </div>
+</div>
+
+<nav>
+  <button class="active" data-sec="dashboard" onclick="ir('dashboard')">Dashboard</button>
+  <button data-sec="produtos" onclick="ir('produtos')">Produtos</button>
+  <button data-sec="materias" onclick="ir('materias')">Matérias-Primas</button>
+  <button data-sec="estoque" onclick="ir('estoque')">Estoque</button>
+  <button data-sec="pedidos" onclick="ir('pedidos')">Pedidos</button>
+  <button data-sec="avisos" onclick="ir('avisos')">Notificações <span class="badge" id="badge-avisos" style="display:none">0</span></button>
+  <button data-sec="historico" onclick="ir('historico')">Histórico</button>
+</nav>
+
+<main>
+
+  <!-- DASHBOARD -->
+  <section class="sec active" id="sec-dashboard">
+    <div class="cards" id="dash-cards"></div>
+    <div class="box">
+      <h3>Avisos recentes</h3>
+      <div id="dash-avisos"><div class="empty">Carregando...</div></div>
+    </div>
+  </section>
+
+  <!-- PRODUTOS -->
+  <section class="sec" id="sec-produtos">
+    <div class="box">
+      <h3>Cadastrar produto</h3>
+      <div class="row">
+        <input id="p-nome" placeholder="Nome do produto">
+        <input id="p-preco" type="number" step="0.01" placeholder="Preço (R$)" style="width:120px">
+        <input id="p-unidade" placeholder="Unidade (un, kg...)" style="width:140px" value="un">
+        <input id="p-estoque-min" type="number" step="0.01" placeholder="Estoque mínimo" style="width:140px">
+      </div>
+      <div id="p-composicao" style="margin-top:14px">
+        <label style="font-size:12px;color:var(--muted)">Composição (matérias-primas usadas por unidade do produto)</label>
+        <div id="p-composicao-lista"></div>
+        <button class="btn secondary small" style="margin-top:6px" onclick="adicionarLinhaComposicao()">+ Adicionar matéria-prima</button>
+      </div>
+      <button class="btn" style="margin-top:14px" onclick="cadastrarProduto()">Cadastrar produto</button>
+    </div>
+    <div class="box">
+      <h3>Produtos cadastrados</h3>
+      <table id="tabela-produtos"><thead><tr><th>Nome</th><th>Preço</th><th>Estoque</th><th>Composição</th><th></th></tr></thead><tbody></tbody></table>
+    </div>
+  </section>
+
+  <!-- MATÉRIAS-PRIMAS -->
+  <section class="sec" id="sec-materias">
+    <div class="box">
+      <h3>Cadastrar matéria-prima</h3>
+      <div class="row">
+        <input id="m-nome" placeholder="Nome (ex: Farinha de trigo)">
+        <input id="m-unidade" placeholder="Unidade (kg, l, un...)" style="width:140px" value="kg">
+        <input id="m-custo" type="number" step="0.01" placeholder="Custo/unidade" style="width:130px">
+        <input id="m-estoque-inicial" type="number" step="0.01" placeholder="Estoque inicial" style="width:130px">
+        <input id="m-estoque-min" type="number" step="0.01" placeholder="Estoque mínimo" style="width:130px">
+      </div>
+      <button class="btn" style="margin-top:14px" onclick="cadastrarMateria()">Cadastrar matéria-prima</button>
+    </div>
+    <div class="box">
+      <h3>Matérias-primas cadastradas</h3>
+      <table id="tabela-materias"><thead><tr><th>Nome</th><th>Estoque</th><th>Mínimo</th><th></th></tr></thead><tbody></tbody></table>
+    </div>
+  </section>
+
+  <!-- ESTOQUE / PRODUÇÃO -->
+  <section class="sec" id="sec-estoque">
+    <div class="box">
+      <h3>Produzir (consome matéria-prima, gera produto pronto)</h3>
+      <div class="row">
+        <select id="prod-produto" style="min-width:220px"></select>
+        <input id="prod-quantidade" type="number" step="0.01" placeholder="Quantidade a produzir" style="width:180px">
+        <button class="btn" onclick="produzir()">Produzir</button>
+      </div>
+    </div>
+    <div class="box">
+      <h3>Estoque de produtos prontos</h3>
+      <table id="tabela-estoque-produtos"><thead><tr><th>Nome</th><th>Estoque</th><th>Status</th><th>Ajustar</th></tr></thead><tbody></tbody></table>
+    </div>
+    <div class="box">
+      <h3>Estoque de matérias-primas</h3>
+      <table id="tabela-estoque-materias"><thead><tr><th>Nome</th><th>Estoque</th><th>Status</th><th>Ajustar</th></tr></thead><tbody></tbody></table>
+    </div>
+  </section>
+
+  <!-- PEDIDOS -->
+  <section class="sec" id="sec-pedidos">
+    <div class="box">
+      <h3>Registrar pedido</h3>
+      <div class="row">
+        <input id="ped-cliente" placeholder="Nome do cliente" style="min-width:180px">
+      </div>
+      <div id="ped-itens" style="margin-top:12px"></div>
+      <button class="btn secondary small" onclick="adicionarLinhaPedido()">+ Adicionar produto</button>
+      <div style="margin-top:14px"><button class="btn" onclick="registrarPedido()">Registrar pedido</button></div>
+    </div>
+    <div class="box">
+      <h3>Pedidos</h3>
+      <table id="tabela-pedidos"><thead><tr><th>Cliente</th><th>Itens</th><th>Total</th><th>Data</th></tr></thead><tbody></tbody></table>
+    </div>
+  </section>
+
+  <!-- AVISOS -->
+  <section class="sec" id="sec-avisos">
+    <div class="box">
+      <h3>Notificações</h3>
+      <div id="lista-avisos"></div>
+    </div>
+  </section>
+
+  <!-- HISTÓRICO -->
+  <section class="sec" id="sec-historico">
+    <div class="box">
+      <h3>Histórico de movimentações</h3>
+      <table id="tabela-historico"><thead><tr><th>Data</th><th>Item</th><th>Tipo</th><th>Movimento</th><th>Qtd</th><th>Estoque final</th><th>Motivo</th></tr></thead><tbody></tbody></table>
+    </div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let produtosCache = [];
+let materiasCache = [];
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 3500);
+}
+
+async function api(url, opts){
+  const r = await fetch(url, Object.assign({headers:{'Content-Type':'application/json'}}, opts||{}));
+  if(r.status === 401){ window.location.href = '/login'; return null; }
+  const j = await r.json().catch(()=>({}));
+  if(!r.ok && j.mensagem){ throw new Error(j.mensagem); }
+  return j;
+}
+
+function ir(sec){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.sec===sec));
+  document.querySelectorAll('.sec').forEach(s=>s.classList.toggle('active', s.id==='sec-'+sec));
+  const loaders = {dashboard: carregarDashboard, produtos: carregarProdutos, materias: carregarMaterias,
+                    estoque: carregarEstoque, pedidos: carregarPedidos, avisos: carregarAvisos, historico: carregarHistorico};
+  if(loaders[sec]) loaders[sec]();
+}
+
+// ---------- DASHBOARD ----------
+async function carregarDashboard(){
+  try{
+    const d = await api('/api/dashboard');
+    document.getElementById('dash-cards').innerHTML = `
+      <div class="kpi"><div class="n">${d.total_produtos}</div><div class="l">Produtos cadastrados</div></div>
+      <div class="kpi"><div class="n">${d.total_materias_primas}</div><div class="l">Matérias-primas</div></div>
+      <div class="kpi ${d.produtos_zerados>0?'danger':''}"><div class="n">${d.produtos_zerados}</div><div class="l">Produtos zerados</div></div>
+      <div class="kpi ${d.produtos_baixos>0?'warn':''}"><div class="n">${d.produtos_baixos}</div><div class="l">Produtos com estoque baixo</div></div>
+      <div class="kpi ${d.materias_zeradas>0?'danger':''}"><div class="n">${d.materias_zeradas}</div><div class="l">Matérias-primas zeradas</div></div>
+      <div class="kpi ${d.materias_baixas>0?'warn':''}"><div class="n">${d.materias_baixas}</div><div class="l">Matérias-primas baixas</div></div>
+      <div class="kpi"><div class="n">${d.total_pedidos}</div><div class="l">Pedidos registrados</div></div>
+      <div class="kpi"><div class="n">R$ ${(d.valor_total_pedidos||0).toFixed(2)}</div><div class="l">Total vendido</div></div>
+    `;
+  }catch(e){ toast('Erro ao carregar dashboard: '+e.message); }
+
+  try{
+    const avisos = await api('/api/avisos');
+    const el = document.getElementById('dash-avisos');
+    if(!avisos.length){ el.innerHTML = '<div class="empty">Nenhum aviso ainda.</div>'; return; }
+    el.innerHTML = avisos.slice(0,5).map(a=>`
+      <div class="aviso-item ${!a.lido?'nao-lido':''}">
+        <div><div class="t">${a.titulo}</div><div class="m">${a.mensagem||''}</div></div>
+        <div class="quando">${new Date(a.criado_em).toLocaleString('pt-BR')}</div>
+      </div>`).join('');
+    atualizarBadgeAvisos(avisos);
+  }catch(e){}
+}
+
+function atualizarBadgeAvisos(avisos){
+  const naoLidos = avisos.filter(a=>!a.lido).length;
+  const b = document.getElementById('badge-avisos');
+  if(naoLidos>0){ b.style.display='inline'; b.textContent = naoLidos; } else { b.style.display='none'; }
+}
+
+// ---------- PRODUTOS ----------
+function adicionarLinhaComposicao(){
+  const div = document.createElement('div');
+  div.className = 'composicao-item';
+  div.innerHTML = `
+    <select class="comp-materia" style="min-width:180px">${materiasCache.map(m=>`<option value="${m.id}">${m.nome} (${m.unidade})</option>`).join('')}</select>
+    <input class="comp-qtd" type="number" step="0.01" placeholder="Quantidade por unidade" style="width:180px">
+    <button class="btn secondary small" onclick="this.parentElement.remove()">Remover</button>
+  `;
+  document.getElementById('p-composicao-lista').appendChild(div);
+}
+
+async function cadastrarProduto(){
+  const nome = document.getElementById('p-nome').value.trim();
+  if(!nome){ toast('Digite o nome do produto'); return; }
+  const composicao = Array.from(document.querySelectorAll('#p-composicao-lista .composicao-item')).map(div=>({
+    materia_prima_id: div.querySelector('.comp-materia').value,
+    quantidade_necessaria: div.querySelector('.comp-qtd').value,
+  })).filter(c=>c.materia_prima_id && c.quantidade_necessaria);
+
+  try{
+    await api('/api/produtos', {method:'POST', body: JSON.stringify({
+      nome,
+      preco: document.getElementById('p-preco').value,
+      unidade: document.getElementById('p-unidade').value || 'un',
+      estoque_minimo: document.getElementById('p-estoque-min').value,
+      composicao,
+    })});
+    toast('Produto cadastrado!');
+    document.getElementById('p-nome').value=''; document.getElementById('p-preco').value='';
+    document.getElementById('p-estoque-min').value=''; document.getElementById('p-composicao-lista').innerHTML='';
+    carregarProdutos();
+  }catch(e){ toast('Erro: '+e.message); }
+}
+
+async function carregarProdutos(){
+  if(!materiasCache.length){ try{ materiasCache = await api('/api/materias-primas'); }catch(e){} }
+  try{
+    produtosCache = await api('/api/produtos');
+    const tbody = document.querySelector('#tabela-produtos tbody');
+    if(!produtosCache.length){ tbody.innerHTML = '<tr><td colspan="5" class="empty">Nenhum produto cadastrado ainda.</td></tr>'; return; }
+    tbody.innerHTML = produtosCache.map(p=>{
+      const comp = (p.produto_materias_primas||[]).map(c=>`${c.materias_primas?.nome||'?'}: ${c.quantidade_necessaria}${c.materias_primas?.unidade||''}`).join(', ') || '—';
+      return `<tr>
+        <td>${p.nome}</td>
+        <td>R$ ${Number(p.preco).toFixed(2)}</td>
+        <td>${p.estoque_atual} ${p.unidade}</td>
+        <td style="font-size:12px;color:var(--muted)">${comp}</td>
+        <td><button class="btn danger small" onclick="excluirProduto('${p.id}')">Excluir</button></td>
+      </tr>`;
+    }).join('');
+  }catch(e){ toast('Erro ao carregar produtos: '+e.message); }
+}
+
+async function excluirProduto(id){
+  if(!confirm('Excluir este produto?')) return;
+  try{ await api('/api/produtos/'+id, {method:'DELETE'}); toast('Produto excluído.'); carregarProdutos(); }
+  catch(e){ toast('Erro: '+e.message); }
+}
+
+// ---------- MATÉRIAS-PRIMAS ----------
+async function cadastrarMateria(){
+  const nome = document.getElementById('m-nome').value.trim();
+  if(!nome){ toast('Digite o nome da matéria-prima'); return; }
+  try{
+    await api('/api/materias-primas', {method:'POST', body: JSON.stringify({
+      nome,
+      unidade: document.getElementById('m-unidade').value || 'un',
+      custo_unitario: document.getElementById('m-custo').value,
+      estoque_atual: document.getElementById('m-estoque-inicial').value,
+      estoque_minimo: document.getElementById('m-estoque-min').value,
+    })});
+    toast('Matéria-prima cadastrada!');
+    document.getElementById('m-nome').value=''; document.getElementById('m-custo').value='';
+    document.getElementById('m-estoque-inicial').value=''; document.getElementById('m-estoque-min').value='';
+    materiasCache = [];
+    carregarMaterias();
+  }catch(e){ toast('Erro: '+e.message); }
+}
+
+async function carregarMaterias(){
+  try{
+    materiasCache = await api('/api/materias-primas');
+    const tbody = document.querySelector('#tabela-materias tbody');
+    if(!materiasCache.length){ tbody.innerHTML = '<tr><td colspan="4" class="empty">Nenhuma matéria-prima cadastrada ainda.</td></tr>'; return; }
+    tbody.innerHTML = materiasCache.map(m=>`
+      <tr>
+        <td>${m.nome}</td>
+        <td>${m.estoque_atual} ${m.unidade}</td>
+        <td>${m.estoque_minimo} ${m.unidade}</td>
+        <td><button class="btn danger small" onclick="excluirMateria('${m.id}')">Excluir</button></td>
+      </tr>`).join('');
+  }catch(e){ toast('Erro ao carregar matérias-primas: '+e.message); }
+}
+
+async function excluirMateria(id){
+  if(!confirm('Excluir esta matéria-prima?')) return;
+  try{ await api('/api/materias-primas/'+id, {method:'DELETE'}); toast('Matéria-prima excluída.'); materiasCache=[]; carregarMaterias(); }
+  catch(e){ toast('Erro: '+e.message); }
+}
+
+// ---------- ESTOQUE / PRODUÇÃO ----------
+async function carregarEstoque(){
+  try{
+    const d = await api('/api/estoque');
+    document.getElementById('prod-produto').innerHTML = d.produtos.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
+
+    const statusPill = (atual, minimo) => atual<=0 ? '<span class="pill danger">Zerado</span>' :
+      (minimo>0 && atual<=minimo) ? '<span class="pill warn">Baixo</span>' : '<span class="pill ok">OK</span>';
+
+    document.querySelector('#tabela-estoque-produtos tbody').innerHTML = d.produtos.length ? d.produtos.map(p=>`
+      <tr><td>${p.nome}</td><td>${p.estoque_atual} ${p.unidade}</td><td>${statusPill(p.estoque_atual,p.estoque_minimo)}</td>
+      <td><button class="btn secondary small" onclick="ajustarEstoque('produto','${p.id}')">Entrada/Saída</button></td></tr>`).join('')
+      : '<tr><td colspan="4" class="empty">Nenhum produto ainda.</td></tr>';
+
+    document.querySelector('#tabela-estoque-materias tbody').innerHTML = d.materias_primas.length ? d.materias_primas.map(m=>`
+      <tr><td>${m.nome}</td><td>${m.estoque_atual} ${m.unidade}</td><td>${statusPill(m.estoque_atual,m.estoque_minimo)}</td>
+      <td><button class="btn secondary small" onclick="ajustarEstoque('materia','${m.id}')">Entrada/Saída</button></td></tr>`).join('')
+      : '<tr><td colspan="4" class="empty">Nenhuma matéria-prima ainda.</td></tr>';
+  }catch(e){ toast('Erro ao carregar estoque: '+e.message); }
+}
+
+async function ajustarEstoque(tipoItem, id){
+  const tipo = prompt("Digite 'entrada' ou 'saida':", 'entrada');
+  if(!tipo || (tipo!=='entrada' && tipo!=='saida')) return;
+  const quantidade = prompt('Quantidade:');
+  if(!quantidade) return;
+  try{
+    const url = tipoItem==='produto' ? null : `/api/materias-primas/${id}/estoque`;
+    if(tipoItem==='materia'){
+      await api(url, {method:'POST', body: JSON.stringify({tipo, quantidade, motivo:'Ajuste manual'})});
+    } else {
+      toast('Para produtos prontos, use "Produzir" para gerar estoque, ou registre um pedido para dar saída.');
+      return;
+    }
+    toast('Estoque atualizado!');
+    carregarEstoque();
+  }catch(e){ toast('Erro: '+e.message); }
+}
+
+async function produzir(){
+  const produtoId = document.getElementById('prod-produto').value;
+  const quantidade = document.getElementById('prod-quantidade').value;
+  if(!produtoId || !quantidade){ toast('Escolha o produto e a quantidade'); return; }
+  try{
+    await api(`/api/produtos/${produtoId}/produzir`, {method:'POST', body: JSON.stringify({quantidade})});
+    toast('Produção registrada!');
+    document.getElementById('prod-quantidade').value='';
+    carregarEstoque();
+  }catch(e){ toast('Erro: '+e.message); }
+}
+
+// ---------- PEDIDOS ----------
+function adicionarLinhaPedido(){
+  const div = document.createElement('div');
+  div.className = 'row';
+  div.style.marginBottom = '8px';
+  div.innerHTML = `
+    <select class="ped-produto" style="min-width:180px">${produtosCache.map(p=>`<option value="${p.id}">${p.nome} (estoque: ${p.estoque_atual})</option>`).join('')}</select>
+    <input class="ped-qtd" type="number" step="0.01" placeholder="Quantidade" style="width:140px">
+    <button class="btn secondary small" onclick="this.parentElement.remove()">Remover</button>
+  `;
+  document.getElementById('ped-itens').appendChild(div);
+}
+
+async function registrarPedido(){
+  const itens = Array.from(document.querySelectorAll('#ped-itens .row')).map(div=>({
+    produto_id: div.querySelector('.ped-produto').value,
+    quantidade: div.querySelector('.ped-qtd').value,
+  })).filter(i=>i.produto_id && i.quantidade);
+
+  if(!itens.length){ toast('Adicione ao menos um produto ao pedido'); return; }
+
+  try{
+    const r = await api('/api/pedidos', {method:'POST', body: JSON.stringify({
+      cliente_nome: document.getElementById('ped-cliente').value,
+      itens,
+    })});
+    toast('Pedido registrado! Total: R$ ' + r.total.toFixed(2));
+    document.getElementById('ped-cliente').value = '';
+    document.getElementById('ped-itens').innerHTML = '';
+    carregarPedidos();
+  }catch(e){ toast('Erro: '+e.message); }
+}
+
+async function carregarPedidos(){
+  if(!produtosCache.length){ try{ produtosCache = await api('/api/produtos'); }catch(e){} }
+  try{
+    const pedidos = await api('/api/pedidos');
+    const tbody = document.querySelector('#tabela-pedidos tbody');
+    if(!pedidos.length){ tbody.innerHTML = '<tr><td colspan="4" class="empty">Nenhum pedido registrado ainda.</td></tr>'; return; }
+    tbody.innerHTML = pedidos.map(p=>{
+      const itens = (p.pedido_itens||[]).map(i=>`${i.quantidade}x ${i.produto_nome}`).join(', ');
+      return `<tr><td>${p.cliente_nome}</td><td style="font-size:12.5px">${itens}</td><td>R$ ${Number(p.total).toFixed(2)}</td><td>${new Date(p.criado_em).toLocaleString('pt-BR')}</td></tr>`;
+    }).join('');
+  }catch(e){ toast('Erro ao carregar pedidos: '+e.message); }
+}
+
+// ---------- AVISOS ----------
+async function carregarAvisos(){
+  try{
+    const avisos = await api('/api/avisos');
+    const el = document.getElementById('lista-avisos');
+    if(!avisos.length){ el.innerHTML = '<div class="empty">Nenhum aviso ainda.</div>'; return; }
+    el.innerHTML = avisos.map(a=>`
+      <div class="aviso-item ${!a.lido?'nao-lido':''}">
+        <div><div class="t">${a.titulo}</div><div class="m">${a.mensagem||''}</div></div>
+        <div style="text-align:right">
+          <div class="quando">${new Date(a.criado_em).toLocaleString('pt-BR')}</div>
+          ${!a.lido ? `<button class="btn secondary small" style="margin-top:4px" onclick="marcarLido('${a.id}')">Marcar lido</button>` : ''}
+        </div>
+      </div>`).join('');
+    atualizarBadgeAvisos(avisos);
+  }catch(e){ toast('Erro ao carregar avisos: '+e.message); }
+}
+
+async function marcarLido(id){
+  try{ await api(`/api/avisos/${id}/lido`, {method:'POST'}); carregarAvisos(); }catch(e){}
+}
+
+// ---------- HISTÓRICO ----------
+async function carregarHistorico(){
+  try{
+    const hist = await api('/api/historico');
+    const tbody = document.querySelector('#tabela-historico tbody');
+    if(!hist.length){ tbody.innerHTML = '<tr><td colspan="7" class="empty">Nenhuma movimentação ainda.</td></tr>'; return; }
+    const tipoLabel = {entrada:'Entrada', saida:'Saída', producao_consumo:'Consumo (produção)', producao_gerado:'Gerado (produção)', ajuste:'Ajuste', pedido:'Venda'};
+    tbody.innerHTML = hist.map(h=>`
+      <tr>
+        <td style="font-size:12px">${new Date(h.criado_em).toLocaleString('pt-BR')}</td>
+        <td>${h.item_nome}</td>
+        <td>${h.tipo_item==='produto'?'Produto':'Matéria-prima'}</td>
+        <td>${tipoLabel[h.tipo_movimento]||h.tipo_movimento}</td>
+        <td>${h.quantidade}</td>
+        <td>${h.estoque_resultante}</td>
+        <td style="font-size:12px;color:var(--muted)">${h.motivo||''}</td>
+      </tr>`).join('');
+  }catch(e){ toast('Erro ao carregar histórico: '+e.message); }
+}
+
+// Inicialização
+carregarDashboard();
+</script>
+</body>
+</html>
