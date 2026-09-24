@@ -115,6 +115,7 @@
 </head>
 <body>
 
+<div id="alerta-topo" onclick="ir('avisos')" style="display:none;position:sticky;top:0;z-index:30;background:var(--tijolo);color:#fff;padding:11px 20px;font-size:13.5px;font-weight:600;text-align:center;cursor:pointer"></div>
 <div class="shell">
   <nav>
     <div class="mark">🌾 Nexus</div>
@@ -316,6 +317,20 @@ async function carregarDashboard(){
   }catch(e){}
 }
 
+async function verificarAlertaTopo(){
+  try{
+    const avisos = await api('/api/avisos');
+    const criticos = avisos.filter(a=>!a.lido && a.prioridade==='alta');
+    const barra = document.getElementById('alerta-topo');
+    if(criticos.length){
+      barra.style.display = 'block';
+      barra.textContent = `🔴 ${criticos.length} aviso${criticos.length>1?'s':''} importante${criticos.length>1?'s':''} — clique aqui para ver (ex: "${criticos[0].titulo}")`;
+    } else if(barra){
+      barra.style.display = 'none';
+    }
+  }catch(e){}
+}
+
 function atualizarBadgeAvisos(avisos){
   const naoLidos = avisos.filter(a=>!a.lido).length;
   const b = document.getElementById('badge-avisos');
@@ -335,25 +350,19 @@ function adicionarLinhaComposicao(){
     <div class="composicao-item" style="margin-bottom:0">
       <select class="comp-materia" style="min-width:170px">${materiasCache.map(m=>`<option value="${m.id}">${m.nome} (${m.unidade})</option>`).join('')}</select>
       <input class="comp-qtd" type="number" step="0.0001" placeholder="Quantidade por unidade" style="width:180px">
-      <button class="btn secondary small" onclick="alternarCalculadora(this)">Não sei, ajuda a calcular</button>
       <button class="btn secondary small" onclick="this.closest('.composicao-item-wrap').remove()">Remover</button>
     </div>
-    <div class="calc-ajuda" style="display:none;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Preenche com os dados da sua receita — o sistema calcula pra você:</div>
+    <div class="calc-ajuda" style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)">
+      <div style="font-size:12.5px;color:var(--accent-escuro);font-weight:600;margin-bottom:8px">🧮 Não sabe o valor por unidade? Calcule aqui:</div>
       <div class="row">
         <input class="calc-total" type="number" step="0.01" placeholder="Quantidade total usada na receita" style="width:220px">
         <span style="font-size:12.5px;color:var(--muted)">rende</span>
         <input class="calc-rende" type="number" step="1" placeholder="quantas unidades" style="width:130px">
-        <button class="btn small" onclick="calcularPorUnidade(this)">Usar esse valor</button>
+        <button class="btn small" onclick="calcularPorUnidade(this)">Calcular e preencher</button>
       </div>
     </div>
   `;
   document.getElementById('p-composicao-lista').appendChild(wrap);
-}
-
-function alternarCalculadora(btn){
-  const calc = btn.closest('.composicao-item-wrap').querySelector('.calc-ajuda');
-  calc.style.display = calc.style.display==='none' ? 'block' : 'none';
 }
 
 function calcularPorUnidade(btn){
@@ -475,6 +484,7 @@ async function cadastrarMateria(){
       estoque_minimo: document.getElementById('m-estoque-min').value,
     })});
     toast('Matéria-prima cadastrada!');
+    verificarAlertaTopo();
     document.getElementById('m-nome').value=''; document.getElementById('m-custo').value='';
     document.getElementById('m-estoque-inicial').value=''; document.getElementById('m-estoque-min').value='';
     materiasCache = [];
@@ -536,6 +546,7 @@ async function ajustarEstoque(tipoItem, id){
       // Entrada de produto pronto = produção: desconta a matéria-prima da composição automaticamente
       await api(`/api/produtos/${id}/produzir`, {method:'POST', body: JSON.stringify({quantidade})});
       toast('Produção registrada — matéria-prima descontada automaticamente!');
+      verificarAlertaTopo();
       carregarEstoque();
       return;
     } else if(tipoItem==='produto' && tipo==='saida'){
@@ -543,6 +554,7 @@ async function ajustarEstoque(tipoItem, id){
       await api(`/api/produtos/${id}/saida`, {method:'POST', body: JSON.stringify({quantidade, motivo:'Ajuste manual (saída)'})});
     }
     toast('Estoque atualizado!');
+    verificarAlertaTopo();
     carregarEstoque();
   }catch(e){ toast('Erro: '+e.message); }
 }
@@ -554,6 +566,7 @@ async function produzir(){
   try{
     await api(`/api/produtos/${produtoId}/produzir`, {method:'POST', body: JSON.stringify({quantidade})});
     toast('Produção registrada!');
+    verificarAlertaTopo();
     document.getElementById('prod-quantidade').value='';
     carregarEstoque();
   }catch(e){ toast('Erro: '+e.message); }
@@ -586,6 +599,7 @@ async function registrarPedido(){
       itens,
     })});
     toast('Pedido registrado! Total: R$ ' + r.total.toFixed(2));
+    verificarAlertaTopo();
     document.getElementById('ped-cliente').value = '';
     document.getElementById('ped-itens').innerHTML = '';
     carregarPedidos();
@@ -649,6 +663,8 @@ async function carregarHistorico(){
 
 // Inicialização
 carregarDashboard();
+verificarAlertaTopo();
+setInterval(verificarAlertaTopo, 20000);
 </script>
 </body>
 </html>
