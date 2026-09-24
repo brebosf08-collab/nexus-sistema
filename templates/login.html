@@ -6,26 +6,25 @@
 <title>Nexus Fábrica — Entrar</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --grao: #1b1712;
-    --forno: #241e17;
-    --crosta: #3a3025;
-    --farinha: #f3ede1;
-    --farinha-fosca: #bfb29b;
-    --mel: #d99a3d;
-    --mel-claro: #edb75f;
-    --trigo: #8a6f43;
+    --bg: #f5f2ea;
+    --card: #ffffff;
+    --card2: #faf6ee;
+    --border: #e6dfd0;
+    --text: #33291f;
+    --muted: #8a7d6a;
+    --accent: #d97757;
+    --accent-escuro: #c05f3d;
+    --trigo: #b08a4f;
   }
   *{box-sizing:border-box}
   body{
     margin:0;
     font-family:'Inter',-apple-system,sans-serif;
-    background:
-      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(217,154,61,0.12), transparent),
-      var(--grao);
-    color:var(--farinha);
+    background:var(--bg);
+    color:var(--text);
     min-height:100vh;
     display:grid;
     grid-template-columns: 1.1fr 1fr;
@@ -37,44 +36,45 @@
     display:flex;
     flex-direction:column;
     justify-content:space-between;
-    border-right:1px solid var(--crosta);
+    background:var(--card2);
+    border-right:1px solid var(--border);
   }
-  .hero .mark{font-family:'Fraunces',serif;font-size:22px;font-weight:600;color:var(--mel-claro)}
-  .hero .headline{font-family:'Fraunces',serif;font-size:44px;line-height:1.15;font-weight:500;max-width:9ch;margin:40px 0 18px}
-  .hero .sub{color:var(--farinha-fosca);font-size:15.5px;max-width:34ch;line-height:1.55}
+  .hero .mark{font-family:'Source Serif 4',serif;font-size:22px;font-weight:600;color:var(--accent-escuro)}
+  .hero .headline{font-family:'Source Serif 4',serif;font-size:44px;line-height:1.15;font-weight:500;max-width:9ch;margin:40px 0 18px;color:var(--text)}
+  .hero .sub{color:var(--muted);font-size:15.5px;max-width:34ch;line-height:1.55}
   .hero .trilha{display:flex;flex-direction:column;gap:14px;margin-top:auto}
-  .trilha .passo{display:flex;align-items:center;gap:12px;font-size:13.5px;color:var(--farinha-fosca)}
+  .trilha .passo{display:flex;align-items:center;gap:12px;font-size:13.5px;color:var(--muted)}
   .trilha .ponto{width:6px;height:6px;border-radius:50%;background:var(--trigo)}
 
   .painel-entrada{
     display:flex;align-items:center;justify-content:center;padding:32px;
   }
   .card{width:100%;max-width:380px}
-  .card .eyebrow{font-family:'Fraunces',serif;font-size:26px;font-weight:600;margin:0 0 6px}
-  .card .sub{color:var(--farinha-fosca);font-size:14px;margin:0 0 30px}
+  .card .eyebrow{font-family:'Source Serif 4',serif;font-size:26px;font-weight:600;margin:0 0 6px;color:var(--text)}
+  .card .sub{color:var(--muted);font-size:14px;margin:0 0 30px}
 
-  .tabs{display:flex;gap:24px;border-bottom:1px solid var(--crosta);margin-bottom:26px}
-  .tab{padding:0 0 12px;cursor:pointer;font-size:14px;color:var(--farinha-fosca);border-bottom:2px solid transparent;font-weight:500}
-  .tab.active{color:var(--mel-claro);border-color:var(--mel)}
+  .tabs{display:flex;gap:24px;border-bottom:1px solid var(--border);margin-bottom:26px}
+  .tab{padding:0 0 12px;cursor:pointer;font-size:14px;color:var(--muted);border-bottom:2px solid transparent;font-weight:500}
+  .tab.active{color:var(--accent-escuro);border-color:var(--accent)}
 
-  label{display:block;font-size:12.5px;color:var(--farinha-fosca);margin:16px 0 6px}
+  label{display:block;font-size:12.5px;color:var(--muted);margin:16px 0 6px}
   input{
-    width:100%;padding:12px 13px;border-radius:9px;border:1px solid var(--crosta);
-    background:var(--forno);color:var(--farinha);font-size:14.5px;font-family:inherit;
+    width:100%;padding:12px 13px;border-radius:9px;border:1px solid var(--border);
+    background:var(--card);color:var(--text);font-size:14.5px;font-family:inherit;
   }
-  input:focus{outline:none;border-color:var(--mel)}
-  input::placeholder{color:#6b5f4d}
+  input:focus{outline:none;border-color:var(--accent)}
+  input::placeholder{color:#b5aa96}
 
   button.submit{
     width:100%;margin-top:26px;padding:13px;border:none;border-radius:9px;
-    background:var(--mel);color:#231a0d;font-size:14.5px;font-weight:700;cursor:pointer;
+    background:var(--accent);color:#fff;font-size:14.5px;font-weight:700;cursor:pointer;
     transition:background .15s;
   }
-  button.submit:hover{background:var(--mel-claro)}
+  button.submit:hover{background:var(--accent-escuro)}
 
   .msg{margin-top:16px;padding:11px 13px;border-radius:9px;font-size:13px;display:none;line-height:1.4}
-  .msg.erro{background:#3a1f18;color:#f0a08a;display:block;border:1px solid #5a2e22}
-  .msg.ok{background:#1c2f1e;color:#a8dcae;display:block;border:1px solid #305237}
+  .msg.erro{background:#fbeae5;color:#b3402a;display:block;border:1px solid #f0c9bb}
+  .msg.ok{background:#eaf3ea;color:#3f7a4c;display:block;border:1px solid #c9e2cb}
 
   .form{display:none}
   .form.active{display:block}

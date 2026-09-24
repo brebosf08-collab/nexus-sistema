@@ -335,6 +335,41 @@ def api_excluir_produto(produto_id):
         return jsonify({"sucesso": False, "mensagem": f"Erro: {e}"}), 400
 
 
+@app.route("/api/produtos/<produto_id>/saida", methods=["POST"])
+@login_required
+def api_saida_produto(produto_id):
+    """Baixa manual de estoque de produto pronto (perda, quebra, ajuste) - não mexe em matéria-prima."""
+    data = request.get_json(force=True, silent=True) or {}
+    quantidade = num(data.get("quantidade"))
+    motivo = data.get("motivo") or "Ajuste manual"
+
+    if quantidade <= 0:
+        return jsonify({"sucesso": False, "mensagem": "Quantidade precisa ser maior que zero"}), 400
+
+    try:
+        res = supabase.table("produtos").select("*").eq("id", produto_id).eq("empresa_id", empresa_id()).execute()
+        if not res.data:
+            return jsonify({"sucesso": False, "mensagem": "Produto não encontrado"}), 404
+        produto = res.data[0]
+
+        novo_estoque = produto["estoque_atual"] - quantidade
+        if novo_estoque < 0:
+            return jsonify({"sucesso": False, "mensagem": "Estoque insuficiente para essa saída"}), 400
+
+        supabase.table("produtos").update({"estoque_atual": novo_estoque}).eq("id", produto_id).execute()
+        registrar_movimento("produto", produto_id, produto["nome"], "ajuste", quantidade, novo_estoque, motivo)
+
+        if produto["estoque_minimo"] > 0 and novo_estoque <= produto["estoque_minimo"]:
+            criar_aviso("estoque_baixo", "⚠️ Estoque baixo de produto",
+                        f"'{produto['nome']}' está com {novo_estoque} {produto['unidade']} (mínimo: {produto['estoque_minimo']})",
+                        "alta")
+
+        return jsonify({"sucesso": True, "estoque_atual": novo_estoque})
+    except Exception as e:
+        log_erro("api_saida_produto", e)
+        return jsonify({"sucesso": False, "mensagem": f"Erro: {e}"}), 400
+
+
 @app.route("/api/produtos/<produto_id>/produzir", methods=["POST"])
 @login_required
 def api_produzir(produto_id):
