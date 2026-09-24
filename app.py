@@ -63,6 +63,17 @@ def registrar_movimento(tipo_item, item_id, item_nome, tipo_movimento, quantidad
         log_erro("registrar_movimento", e)
 
 
+def verificar_alerta_estoque(tipo_item, nome, unidade, novo_estoque, estoque_minimo):
+    """Dispara aviso quando o estoque zera (sempre) ou fica no/abaixo do mínimo (se definido)."""
+    rotulo = "produto" if tipo_item == "produto" else "matéria-prima"
+    if novo_estoque <= 0:
+        criar_aviso("estoque_zerado", f"🔴 Estoque zerado de {rotulo}",
+                    f"'{nome}' chegou a zero. Produção/venda desse item vai parar até repor.", "alta")
+    elif estoque_minimo > 0 and novo_estoque <= estoque_minimo:
+        criar_aviso("estoque_baixo", f"⚠️ Estoque baixo de {rotulo}",
+                    f"'{nome}' está com {novo_estoque} {unidade} (mínimo definido: {estoque_minimo})", "alta")
+
+
 def criar_aviso(tipo, titulo, mensagem="", prioridade="normal"):
     try:
         supabase.table("avisos").insert({
@@ -242,11 +253,7 @@ def api_ajustar_estoque_materia(materia_id):
 
         supabase.table("materias_primas").update({"estoque_atual": novo_estoque}).eq("id", materia_id).execute()
         registrar_movimento("materia_prima", materia_id, materia["nome"], tipo, quantidade, novo_estoque, motivo)
-
-        if materia["estoque_minimo"] > 0 and novo_estoque <= materia["estoque_minimo"]:
-            criar_aviso("estoque_baixo", "⚠️ Estoque baixo de matéria-prima",
-                        f"'{materia['nome']}' está com {novo_estoque} {materia['unidade']} (mínimo: {materia['estoque_minimo']})",
-                        "alta")
+        verificar_alerta_estoque("materia_prima", materia["nome"], materia["unidade"], novo_estoque, materia["estoque_minimo"])
 
         return jsonify({"sucesso": True, "estoque_atual": novo_estoque})
     except Exception as e:
@@ -360,11 +367,7 @@ def api_saida_produto(produto_id):
 
         supabase.table("produtos").update({"estoque_atual": novo_estoque}).eq("id", produto_id).execute()
         registrar_movimento("produto", produto_id, produto["nome"], "ajuste", quantidade, novo_estoque, motivo)
-
-        if produto["estoque_minimo"] > 0 and novo_estoque <= produto["estoque_minimo"]:
-            criar_aviso("estoque_baixo", "⚠️ Estoque baixo de produto",
-                        f"'{produto['nome']}' está com {novo_estoque} {produto['unidade']} (mínimo: {produto['estoque_minimo']})",
-                        "alta")
+        verificar_alerta_estoque("produto", produto["nome"], produto["unidade"], novo_estoque, produto["estoque_minimo"])
 
         return jsonify({"sucesso": True, "estoque_atual": novo_estoque})
     except Exception as e:
@@ -412,11 +415,7 @@ def api_produzir(produto_id):
             supabase.table("materias_primas").update({"estoque_atual": novo_estoque_materia}).eq("id", materia["id"]).execute()
             registrar_movimento("materia_prima", materia["id"], materia["nome"], "producao_consumo",
                                  necessario, novo_estoque_materia, f"Usado para produzir {quantidade_produzir} de {produto['nome']}")
-
-            if materia["estoque_minimo"] > 0 and novo_estoque_materia <= materia["estoque_minimo"]:
-                criar_aviso("estoque_baixo", "⚠️ Estoque baixo de matéria-prima",
-                            f"'{materia['nome']}' está com {novo_estoque_materia} {materia['unidade']} (mínimo: {materia['estoque_minimo']})",
-                            "alta")
+            verificar_alerta_estoque("materia_prima", materia["nome"], materia["unidade"], novo_estoque_materia, materia["estoque_minimo"])
 
         # Gera o estoque do produto pronto
         novo_estoque_produto = produto["estoque_atual"] + quantidade_produzir
@@ -530,11 +529,7 @@ def api_criar_pedido():
             supabase.table("produtos").update({"estoque_atual": novo_estoque}).eq("id", item["produto_id"]).execute()
             registrar_movimento("produto", item["produto_id"], produto["nome"], "pedido",
                                  item["quantidade"], novo_estoque, f"Pedido #{pedido['id'][:8]}")
-
-            if produto["estoque_minimo"] > 0 and novo_estoque <= produto["estoque_minimo"]:
-                criar_aviso("estoque_baixo", "⚠️ Estoque baixo de produto",
-                            f"'{produto['nome']}' está com {novo_estoque} {produto['unidade']} (mínimo: {produto['estoque_minimo']})",
-                            "alta")
+            verificar_alerta_estoque("produto", produto["nome"], produto["unidade"], novo_estoque, produto["estoque_minimo"])
 
         criar_aviso("pedido", "🛒 Novo pedido registrado", f"Pedido de {cliente_nome} - Total: R$ {total:.2f}", "alta")
 
