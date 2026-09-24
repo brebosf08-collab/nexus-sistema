@@ -4,183 +4,247 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nexus Fábrica — Painel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  :root{--bg:#0f1117;--card:#171a24;--card2:#1d2130;--border:#262a38;--text:#e8e9ee;--muted:#8a8fa3;--accent:#6366f1;--accent2:#818cf8;--danger:#ef4444;--ok:#22c55e;--warn:#f59e0b}
+  :root{
+    --grao:#181410; --forno:#211b15; --forno2:#2a231b; --crosta:#3a3025;
+    --farinha:#f3ede1; --farinha-fosca:#a99d87;
+    --mel:#d99a3d; --mel-claro:#edb75f;
+    --sauge:#7a9a72; --sauge-bg:#1c2818;
+    --mostarda:#c9a227; --mostarda-bg:#2c2510;
+    --tijolo:#c1594a; --tijolo-bg:#2e1a16;
+  }
   *{box-sizing:border-box}
-  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
-  .topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:10}
-  .topbar h1{font-size:18px;margin:0}
-  .topbar .right{display:flex;align-items:center;gap:14px;font-size:13px;color:var(--muted)}
-  .topbar a{color:var(--muted);text-decoration:none}
-  nav{display:flex;gap:4px;padding:10px 16px;overflow-x:auto;border-bottom:1px solid var(--border)}
-  nav button{white-space:nowrap;padding:9px 14px;border-radius:8px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:13.5px;position:relative}
-  nav button.active{background:var(--card2);color:var(--text)}
-  nav button .badge{background:var(--danger);color:#fff;font-size:10px;padding:1px 5px;border-radius:8px;margin-left:5px}
-  main{padding:20px;max-width:1100px;margin:0 auto}
+  body{margin:0;font-family:'Inter',-apple-system,sans-serif;background:var(--grao);color:var(--farinha)}
+  ::selection{background:var(--mel);color:#221a0d}
+
+  .shell{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
+  @media (max-width:820px){ .shell{grid-template-columns:1fr} nav{position:sticky;top:0;z-index:20;height:auto} }
+
+  nav{
+    background:var(--forno);border-right:1px solid var(--crosta);
+    display:flex;flex-direction:column;padding:22px 14px;gap:2px;height:100vh;position:sticky;top:0;
+  }
+  nav .mark{font-family:'Fraunces',serif;font-size:18px;font-weight:600;color:var(--mel-claro);padding:0 10px 22px}
+  nav button{
+    display:flex;align-items:center;gap:10px;text-align:left;white-space:nowrap;
+    padding:10px 12px;border-radius:9px;border:none;background:transparent;color:var(--farinha-fosca);
+    cursor:pointer;font-size:13.8px;font-family:inherit;position:relative;
+  }
+  nav button:hover{color:var(--farinha)}
+  nav button.active{background:var(--forno2);color:var(--farinha)}
+  nav button.active::before{content:'';position:absolute;left:-14px;top:8px;bottom:8px;width:3px;background:var(--mel);border-radius:2px}
+  nav button .badge{margin-left:auto;background:var(--tijolo);color:#fff;font-size:10px;padding:1px 6px;border-radius:8px}
+  nav .rodape{margin-top:auto;padding:10px 12px;font-size:12px;color:#6b5f4d;border-top:1px solid var(--crosta);padding-top:16px}
+  nav .rodape a{color:var(--farinha-fosca);text-decoration:none}
+
+  main{padding:30px 40px;max-width:1080px}
+  @media (max-width:820px){ main{padding:20px} }
+
   .sec{display:none}
   .sec.active{display:block}
-  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px}
-  .kpi{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
-  .kpi .n{font-size:26px;font-weight:700}
-  .kpi .l{font-size:12px;color:var(--muted);margin-top:2px}
-  .kpi.warn .n{color:var(--warn)}
-  .kpi.danger .n{color:var(--danger)}
+  .sec > h2{font-family:'Fraunces',serif;font-weight:600;font-size:24px;margin:0 0 22px}
+
+  /* Dashboard hero + kpis */
+  .hero-stat{
+    background:linear-gradient(135deg, var(--forno2), var(--forno));
+    border:1px solid var(--crosta);border-radius:16px;padding:28px 30px;margin-bottom:16px;
+    display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;
+  }
+  .hero-stat .l{color:var(--farinha-fosca);font-size:13px;margin-bottom:6px}
+  .hero-stat .n{font-family:'Fraunces',serif;font-size:42px;font-weight:600;color:var(--mel-claro);line-height:1}
+  .hero-stat .extra{text-align:right;color:var(--farinha-fosca);font-size:13px}
+  .hero-stat .extra b{color:var(--farinha);font-size:15px;display:block}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:26px}
+  .kpi{background:var(--forno);border:1px solid var(--crosta);border-radius:12px;padding:16px}
+  .kpi .n{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}
+  .kpi .l{font-size:12px;color:var(--farinha-fosca);margin-top:3px}
+  .kpi.sauge .n{color:var(--sauge)}
+  .kpi.mostarda .n{color:var(--mostarda)}
+  .kpi.tijolo .n{color:var(--tijolo)}
+
+  .box{background:var(--forno);border:1px solid var(--crosta);border-radius:14px;padding:20px;margin-bottom:18px}
+  .box h3{margin:0 0 16px;font-size:14.5px;font-weight:600;color:var(--farinha)}
+
   table{width:100%;border-collapse:collapse;font-size:13.5px}
-  th{text-align:left;color:var(--muted);font-weight:500;padding:8px;border-bottom:1px solid var(--border);font-size:12px;text-transform:uppercase}
-  td{padding:10px 8px;border-bottom:1px solid var(--border)}
-  tr:hover td{background:var(--card2)}
-  .box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:18px}
-  .box h3{margin:0 0 14px;font-size:15px}
+  th{text-align:left;color:var(--farinha-fosca);font-weight:500;padding:9px 8px;border-bottom:1px solid var(--crosta);font-size:12px}
+  td{padding:11px 8px;border-bottom:1px solid var(--crosta)}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:var(--forno2)}
+
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  input,select{padding:9px 10px;border-radius:8px;border:1px solid var(--border);background:#0f1117;color:var(--text);font-size:13.5px}
-  button.btn{padding:9px 16px;border:none;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer;font-size:13.5px;font-weight:600}
-  button.btn:hover{background:var(--accent2)}
-  button.btn.secondary{background:var(--card2);color:var(--text);border:1px solid var(--border)}
-  button.btn.danger{background:var(--danger)}
-  button.btn.small{padding:5px 10px;font-size:12px}
-  .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
-  .pill.ok{background:#12301c;color:#7ee8a3}
-  .pill.warn{background:#3a2c0f;color:#ffcf7a}
-  .pill.danger{background:#3a1a1a;color:#ff8b8b}
-  .empty{color:var(--muted);font-size:13.5px;padding:20px;text-align:center}
+  label.field-label{display:block;font-size:12px;color:var(--farinha-fosca);margin-bottom:14px}
+  input,select{
+    padding:10px 12px;border-radius:8px;border:1px solid var(--crosta);
+    background:var(--grao);color:var(--farinha);font-size:13.8px;font-family:inherit;
+  }
+  input:focus,select:focus{outline:none;border-color:var(--mel)}
+  input::placeholder{color:#6b5f4d}
+
+  button.btn{padding:10px 18px;border:none;border-radius:8px;background:var(--mel);color:#221a0d;cursor:pointer;font-size:13.5px;font-weight:700}
+  button.btn:hover{background:var(--mel-claro)}
+  button.btn.secondary{background:var(--forno2);color:var(--farinha);border:1px solid var(--crosta);font-weight:600}
+  button.btn.secondary:hover{border-color:var(--mel)}
+  button.btn.danger{background:transparent;color:var(--tijolo);border:1px solid var(--tijolo)}
+  button.btn.small{padding:6px 12px;font-size:12px}
+
+  .pill{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+  .pill.ok{background:var(--sauge-bg);color:var(--sauge)}
+  .pill.warn{background:var(--mostarda-bg);color:var(--mostarda)}
+  .pill.danger{background:var(--tijolo-bg);color:var(--tijolo)}
+
+  .empty{color:var(--farinha-fosca);font-size:13.5px;padding:26px;text-align:center}
   .composicao-item{display:flex;gap:8px;align-items:center;margin-bottom:8px}
-  .toast{position:fixed;bottom:20px;right:20px;background:var(--card2);border:1px solid var(--border);padding:12px 18px;border-radius:10px;font-size:13.5px;display:none;max-width:320px;z-index:100}
+
+  .toast{position:fixed;bottom:22px;right:22px;background:var(--forno2);border:1px solid var(--crosta);
+    padding:13px 18px;border-radius:10px;font-size:13.5px;display:none;max-width:320px;z-index:100;
+    box-shadow:0 8px 24px rgba(0,0,0,.35)}
   .toast.show{display:block}
-  .aviso-item{padding:12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:10px}
-  .aviso-item.nao-lido{background:rgba(99,102,241,0.06)}
-  .aviso-item .t{font-weight:600;font-size:13.5px}
-  .aviso-item .m{color:var(--muted);font-size:12.5px;margin-top:2px}
-  .aviso-item .quando{color:var(--muted);font-size:11px;white-space:nowrap}
-  select[multiple]{height:auto}
+
+  .aviso-item{padding:14px 4px;border-bottom:1px solid var(--crosta);display:flex;justify-content:space-between;gap:10px}
+  .aviso-item:last-child{border-bottom:none}
+  .aviso-item.nao-lido{position:relative}
+  .aviso-item.nao-lido::before{content:'';position:absolute;left:-16px;top:18px;width:6px;height:6px;border-radius:50%;background:var(--mel)}
+  .aviso-item .t{font-weight:600;font-size:13.8px}
+  .aviso-item .m{color:var(--farinha-fosca);font-size:12.8px;margin-top:2px}
+  .aviso-item .quando{color:#6b5f4d;font-size:11px;white-space:nowrap}
 </style>
 </head>
 <body>
 
-<div class="topbar">
-  <h1>🏭 Nexus Fábrica</h1>
-  <div class="right">
-    <span>{{ empresa_nome }}</span>
-    <a href="/logout">Sair</a>
-  </div>
+<div class="shell">
+  <nav>
+    <div class="mark">🌾 Nexus</div>
+    <button class="active" data-sec="dashboard" onclick="ir('dashboard')">📊 Painel</button>
+    <button data-sec="produtos" onclick="ir('produtos')">🍪 Produtos</button>
+    <button data-sec="materias" onclick="ir('materias')">🌾 Matérias-primas</button>
+    <button data-sec="estoque" onclick="ir('estoque')">📦 Estoque</button>
+    <button data-sec="pedidos" onclick="ir('pedidos')">🧾 Pedidos</button>
+    <button data-sec="avisos" onclick="ir('avisos')">🔔 Notificações <span class="badge" id="badge-avisos" style="display:none">0</span></button>
+    <button data-sec="historico" onclick="ir('historico')">🕘 Histórico</button>
+    <div class="rodape">
+      {{ empresa_nome }}<br>
+      <a href="/logout">Sair da conta</a>
+    </div>
+  </nav>
+
+  <main>
+
+    <!-- DASHBOARD -->
+    <section class="sec active" id="sec-dashboard">
+      <h2>Painel</h2>
+      <div id="dash-hero"></div>
+      <div class="cards" id="dash-cards"></div>
+      <div class="box">
+        <h3>Avisos recentes</h3>
+        <div id="dash-avisos"><div class="empty">Carregando...</div></div>
+      </div>
+    </section>
+
+    <!-- PRODUTOS -->
+    <section class="sec" id="sec-produtos">
+      <h2>Produtos</h2>
+      <div class="box">
+        <h3>Cadastrar produto</h3>
+        <div class="row">
+          <input id="p-nome" placeholder="Nome do produto">
+          <input id="p-preco" type="number" step="0.01" placeholder="Preço (R$)" style="width:120px">
+          <input id="p-unidade" placeholder="Unidade" style="width:110px" value="un">
+          <input id="p-estoque-min" type="number" step="0.01" placeholder="Estoque mínimo" style="width:140px">
+        </div>
+        <div id="p-composicao" style="margin-top:16px">
+          <label class="field-label">Composição — matérias-primas usadas por unidade do produto</label>
+          <div id="p-composicao-lista"></div>
+          <button class="btn secondary small" style="margin-top:4px" onclick="adicionarLinhaComposicao()">+ Adicionar matéria-prima</button>
+        </div>
+        <button class="btn" style="margin-top:16px" onclick="cadastrarProduto()">Cadastrar produto</button>
+      </div>
+      <div class="box">
+        <h3>Produtos cadastrados</h3>
+        <table id="tabela-produtos"><thead><tr><th>Nome</th><th>Preço</th><th>Estoque</th><th>Composição</th><th></th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <!-- MATÉRIAS-PRIMAS -->
+    <section class="sec" id="sec-materias">
+      <h2>Matérias-primas</h2>
+      <div class="box">
+        <h3>Cadastrar matéria-prima</h3>
+        <div class="row">
+          <input id="m-nome" placeholder="Nome (ex: Farinha de trigo)">
+          <input id="m-unidade" placeholder="Unidade" style="width:110px" value="kg">
+          <input id="m-custo" type="number" step="0.01" placeholder="Custo/unidade" style="width:130px">
+          <input id="m-estoque-inicial" type="number" step="0.01" placeholder="Estoque inicial" style="width:130px">
+          <input id="m-estoque-min" type="number" step="0.01" placeholder="Estoque mínimo" style="width:130px">
+        </div>
+        <button class="btn" style="margin-top:16px" onclick="cadastrarMateria()">Cadastrar matéria-prima</button>
+      </div>
+      <div class="box">
+        <h3>Matérias-primas cadastradas</h3>
+        <table id="tabela-materias"><thead><tr><th>Nome</th><th>Estoque</th><th>Mínimo</th><th></th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <!-- ESTOQUE / PRODUÇÃO -->
+    <section class="sec" id="sec-estoque">
+      <h2>Estoque</h2>
+      <div class="box">
+        <h3>Produzir — consome matéria-prima, gera produto pronto</h3>
+        <div class="row">
+          <select id="prod-produto" style="min-width:220px"></select>
+          <input id="prod-quantidade" type="number" step="0.01" placeholder="Quantidade a produzir" style="width:190px">
+          <button class="btn" onclick="produzir()">Produzir</button>
+        </div>
+      </div>
+      <div class="box">
+        <h3>Estoque de produtos prontos</h3>
+        <table id="tabela-estoque-produtos"><thead><tr><th>Nome</th><th>Estoque</th><th>Status</th><th></th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="box">
+        <h3>Estoque de matérias-primas</h3>
+        <table id="tabela-estoque-materias"><thead><tr><th>Nome</th><th>Estoque</th><th>Status</th><th></th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <!-- PEDIDOS -->
+    <section class="sec" id="sec-pedidos">
+      <h2>Pedidos</h2>
+      <div class="box">
+        <h3>Registrar pedido</h3>
+        <div class="row">
+          <input id="ped-cliente" placeholder="Nome do cliente" style="min-width:200px">
+        </div>
+        <div id="ped-itens" style="margin-top:14px"></div>
+        <button class="btn secondary small" onclick="adicionarLinhaPedido()">+ Adicionar produto</button>
+        <div style="margin-top:16px"><button class="btn" onclick="registrarPedido()">Registrar pedido</button></div>
+      </div>
+      <div class="box">
+        <h3>Pedidos registrados</h3>
+        <table id="tabela-pedidos"><thead><tr><th>Cliente</th><th>Itens</th><th>Total</th><th>Data</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <!-- AVISOS -->
+    <section class="sec" id="sec-avisos">
+      <h2>Notificações</h2>
+      <div class="box">
+        <div id="lista-avisos"></div>
+      </div>
+    </section>
+
+    <!-- HISTÓRICO -->
+    <section class="sec" id="sec-historico">
+      <h2>Histórico de movimentações</h2>
+      <div class="box">
+        <table id="tabela-historico"><thead><tr><th>Data</th><th>Item</th><th>Tipo</th><th>Movimento</th><th>Qtd</th><th>Estoque final</th><th>Motivo</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+  </main>
 </div>
-
-<nav>
-  <button class="active" data-sec="dashboard" onclick="ir('dashboard')">Dashboard</button>
-  <button data-sec="produtos" onclick="ir('produtos')">Produtos</button>
-  <button data-sec="materias" onclick="ir('materias')">Matérias-Primas</button>
-  <button data-sec="estoque" onclick="ir('estoque')">Estoque</button>
-  <button data-sec="pedidos" onclick="ir('pedidos')">Pedidos</button>
-  <button data-sec="avisos" onclick="ir('avisos')">Notificações <span class="badge" id="badge-avisos" style="display:none">0</span></button>
-  <button data-sec="historico" onclick="ir('historico')">Histórico</button>
-</nav>
-
-<main>
-
-  <!-- DASHBOARD -->
-  <section class="sec active" id="sec-dashboard">
-    <div class="cards" id="dash-cards"></div>
-    <div class="box">
-      <h3>Avisos recentes</h3>
-      <div id="dash-avisos"><div class="empty">Carregando...</div></div>
-    </div>
-  </section>
-
-  <!-- PRODUTOS -->
-  <section class="sec" id="sec-produtos">
-    <div class="box">
-      <h3>Cadastrar produto</h3>
-      <div class="row">
-        <input id="p-nome" placeholder="Nome do produto">
-        <input id="p-preco" type="number" step="0.01" placeholder="Preço (R$)" style="width:120px">
-        <input id="p-unidade" placeholder="Unidade (un, kg...)" style="width:140px" value="un">
-        <input id="p-estoque-min" type="number" step="0.01" placeholder="Estoque mínimo" style="width:140px">
-      </div>
-      <div id="p-composicao" style="margin-top:14px">
-        <label style="font-size:12px;color:var(--muted)">Composição (matérias-primas usadas por unidade do produto)</label>
-        <div id="p-composicao-lista"></div>
-        <button class="btn secondary small" style="margin-top:6px" onclick="adicionarLinhaComposicao()">+ Adicionar matéria-prima</button>
-      </div>
-      <button class="btn" style="margin-top:14px" onclick="cadastrarProduto()">Cadastrar produto</button>
-    </div>
-    <div class="box">
-      <h3>Produtos cadastrados</h3>
-      <table id="tabela-produtos"><thead><tr><th>Nome</th><th>Preço</th><th>Estoque</th><th>Composição</th><th></th></tr></thead><tbody></tbody></table>
-    </div>
-  </section>
-
-  <!-- MATÉRIAS-PRIMAS -->
-  <section class="sec" id="sec-materias">
-    <div class="box">
-      <h3>Cadastrar matéria-prima</h3>
-      <div class="row">
-        <input id="m-nome" placeholder="Nome (ex: Farinha de trigo)">
-        <input id="m-unidade" placeholder="Unidade (kg, l, un...)" style="width:140px" value="kg">
-        <input id="m-custo" type="number" step="0.01" placeholder="Custo/unidade" style="width:130px">
-        <input id="m-estoque-inicial" type="number" step="0.01" placeholder="Estoque inicial" style="width:130px">
-        <input id="m-estoque-min" type="number" step="0.01" placeholder="Estoque mínimo" style="width:130px">
-      </div>
-      <button class="btn" style="margin-top:14px" onclick="cadastrarMateria()">Cadastrar matéria-prima</button>
-    </div>
-    <div class="box">
-      <h3>Matérias-primas cadastradas</h3>
-      <table id="tabela-materias"><thead><tr><th>Nome</th><th>Estoque</th><th>Mínimo</th><th></th></tr></thead><tbody></tbody></table>
-    </div>
-  </section>
-
-  <!-- ESTOQUE / PRODUÇÃO -->
-  <section class="sec" id="sec-estoque">
-    <div class="box">
-      <h3>Produzir (consome matéria-prima, gera produto pronto)</h3>
-      <div class="row">
-        <select id="prod-produto" style="min-width:220px"></select>
-        <input id="prod-quantidade" type="number" step="0.01" placeholder="Quantidade a produzir" style="width:180px">
-        <button class="btn" onclick="produzir()">Produzir</button>
-      </div>
-    </div>
-    <div class="box">
-      <h3>Estoque de produtos prontos</h3>
-      <table id="tabela-estoque-produtos"><thead><tr><th>Nome</th><th>Estoque</th><th>Status</th><th>Ajustar</th></tr></thead><tbody></tbody></table>
-    </div>
-    <div class="box">
-      <h3>Estoque de matérias-primas</h3>
-      <table id="tabela-estoque-materias"><thead><tr><th>Nome</th><th>Estoque</th><th>Status</th><th>Ajustar</th></tr></thead><tbody></tbody></table>
-    </div>
-  </section>
-
-  <!-- PEDIDOS -->
-  <section class="sec" id="sec-pedidos">
-    <div class="box">
-      <h3>Registrar pedido</h3>
-      <div class="row">
-        <input id="ped-cliente" placeholder="Nome do cliente" style="min-width:180px">
-      </div>
-      <div id="ped-itens" style="margin-top:12px"></div>
-      <button class="btn secondary small" onclick="adicionarLinhaPedido()">+ Adicionar produto</button>
-      <div style="margin-top:14px"><button class="btn" onclick="registrarPedido()">Registrar pedido</button></div>
-    </div>
-    <div class="box">
-      <h3>Pedidos</h3>
-      <table id="tabela-pedidos"><thead><tr><th>Cliente</th><th>Itens</th><th>Total</th><th>Data</th></tr></thead><tbody></tbody></table>
-    </div>
-  </section>
-
-  <!-- AVISOS -->
-  <section class="sec" id="sec-avisos">
-    <div class="box">
-      <h3>Notificações</h3>
-      <div id="lista-avisos"></div>
-    </div>
-  </section>
-
-  <!-- HISTÓRICO -->
-  <section class="sec" id="sec-historico">
-    <div class="box">
-      <h3>Histórico de movimentações</h3>
-      <table id="tabela-historico"><thead><tr><th>Data</th><th>Item</th><th>Tipo</th><th>Movimento</th><th>Qtd</th><th>Estoque final</th><th>Motivo</th></tr></thead><tbody></tbody></table>
-    </div>
-  </section>
-
-</main>
 
 <div class="toast" id="toast"></div>
 
@@ -204,7 +268,7 @@ async function api(url, opts){
 }
 
 function ir(sec){
-  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.sec===sec));
+  document.querySelectorAll('nav button[data-sec]').forEach(b=>b.classList.toggle('active', b.dataset.sec===sec));
   document.querySelectorAll('.sec').forEach(s=>s.classList.toggle('active', s.id==='sec-'+sec));
   const loaders = {dashboard: carregarDashboard, produtos: carregarProdutos, materias: carregarMaterias,
                     estoque: carregarEstoque, pedidos: carregarPedidos, avisos: carregarAvisos, historico: carregarHistorico};
@@ -215,15 +279,26 @@ function ir(sec){
 async function carregarDashboard(){
   try{
     const d = await api('/api/dashboard');
+    const valorTotal = (d.valor_estoque_produtos||0) + (d.valor_estoque_materias||0);
+    document.getElementById('dash-hero').innerHTML = `
+      <div class="hero-stat">
+        <div>
+          <div class="l">Valor total em estoque</div>
+          <div class="n">R$ ${valorTotal.toFixed(2)}</div>
+        </div>
+        <div class="extra">
+          Vendido até hoje
+          <b>R$ ${(d.valor_total_pedidos||0).toFixed(2)}</b>
+        </div>
+      </div>`;
     document.getElementById('dash-cards').innerHTML = `
       <div class="kpi"><div class="n">${d.total_produtos}</div><div class="l">Produtos cadastrados</div></div>
       <div class="kpi"><div class="n">${d.total_materias_primas}</div><div class="l">Matérias-primas</div></div>
-      <div class="kpi ${d.produtos_zerados>0?'danger':''}"><div class="n">${d.produtos_zerados}</div><div class="l">Produtos zerados</div></div>
-      <div class="kpi ${d.produtos_baixos>0?'warn':''}"><div class="n">${d.produtos_baixos}</div><div class="l">Produtos com estoque baixo</div></div>
-      <div class="kpi ${d.materias_zeradas>0?'danger':''}"><div class="n">${d.materias_zeradas}</div><div class="l">Matérias-primas zeradas</div></div>
-      <div class="kpi ${d.materias_baixas>0?'warn':''}"><div class="n">${d.materias_baixas}</div><div class="l">Matérias-primas baixas</div></div>
+      <div class="kpi ${d.produtos_zerados>0?'tijolo':''}"><div class="n">${d.produtos_zerados}</div><div class="l">Produtos zerados</div></div>
+      <div class="kpi ${d.produtos_baixos>0?'mostarda':''}"><div class="n">${d.produtos_baixos}</div><div class="l">Produtos com estoque baixo</div></div>
+      <div class="kpi ${d.materias_zeradas>0?'tijolo':''}"><div class="n">${d.materias_zeradas}</div><div class="l">Matérias-primas zeradas</div></div>
+      <div class="kpi ${d.materias_baixas>0?'mostarda':''}"><div class="n">${d.materias_baixas}</div><div class="l">Matérias-primas baixas</div></div>
       <div class="kpi"><div class="n">${d.total_pedidos}</div><div class="l">Pedidos registrados</div></div>
-      <div class="kpi"><div class="n">R$ ${(d.valor_total_pedidos||0).toFixed(2)}</div><div class="l">Total vendido</div></div>
     `;
   }catch(e){ toast('Erro ao carregar dashboard: '+e.message); }
 
@@ -252,7 +327,7 @@ function adicionarLinhaComposicao(){
   div.className = 'composicao-item';
   div.innerHTML = `
     <select class="comp-materia" style="min-width:180px">${materiasCache.map(m=>`<option value="${m.id}">${m.nome} (${m.unidade})</option>`).join('')}</select>
-    <input class="comp-qtd" type="number" step="0.01" placeholder="Quantidade por unidade" style="width:180px">
+    <input class="comp-qtd" type="number" step="0.01" placeholder="Quantidade por unidade" style="width:190px">
     <button class="btn secondary small" onclick="this.parentElement.remove()">Remover</button>
   `;
   document.getElementById('p-composicao-lista').appendChild(div);
@@ -293,7 +368,7 @@ async function carregarProdutos(){
         <td>${p.nome}</td>
         <td>R$ ${Number(p.preco).toFixed(2)}</td>
         <td>${p.estoque_atual} ${p.unidade}</td>
-        <td style="font-size:12px;color:var(--muted)">${comp}</td>
+        <td style="font-size:12px;color:var(--farinha-fosca)">${comp}</td>
         <td><button class="btn danger small" onclick="excluirProduto('${p.id}')">Excluir</button></td>
       </tr>`;
     }).join('');
@@ -374,9 +449,8 @@ async function ajustarEstoque(tipoItem, id){
   const quantidade = prompt('Quantidade:');
   if(!quantidade) return;
   try{
-    const url = tipoItem==='produto' ? null : `/api/materias-primas/${id}/estoque`;
     if(tipoItem==='materia'){
-      await api(url, {method:'POST', body: JSON.stringify({tipo, quantidade, motivo:'Ajuste manual'})});
+      await api(`/api/materias-primas/${id}/estoque`, {method:'POST', body: JSON.stringify({tipo, quantidade, motivo:'Ajuste manual'})});
     } else {
       toast('Para produtos prontos, use "Produzir" para gerar estoque, ou registre um pedido para dar saída.');
       return;
@@ -405,7 +479,7 @@ function adicionarLinhaPedido(){
   div.style.marginBottom = '8px';
   div.innerHTML = `
     <select class="ped-produto" style="min-width:180px">${produtosCache.map(p=>`<option value="${p.id}">${p.nome} (estoque: ${p.estoque_atual})</option>`).join('')}</select>
-    <input class="ped-qtd" type="number" step="0.01" placeholder="Quantidade" style="width:140px">
+    <input class="ped-qtd" type="number" step="0.01" placeholder="Quantidade" style="width:150px">
     <button class="btn secondary small" onclick="this.parentElement.remove()">Remover</button>
   `;
   document.getElementById('ped-itens').appendChild(div);
@@ -455,7 +529,7 @@ async function carregarAvisos(){
         <div><div class="t">${a.titulo}</div><div class="m">${a.mensagem||''}</div></div>
         <div style="text-align:right">
           <div class="quando">${new Date(a.criado_em).toLocaleString('pt-BR')}</div>
-          ${!a.lido ? `<button class="btn secondary small" style="margin-top:4px" onclick="marcarLido('${a.id}')">Marcar lido</button>` : ''}
+          ${!a.lido ? `<button class="btn secondary small" style="margin-top:6px" onclick="marcarLido('${a.id}')">Marcar lido</button>` : ''}
         </div>
       </div>`).join('');
     atualizarBadgeAvisos(avisos);
@@ -481,7 +555,7 @@ async function carregarHistorico(){
         <td>${tipoLabel[h.tipo_movimento]||h.tipo_movimento}</td>
         <td>${h.quantidade}</td>
         <td>${h.estoque_resultante}</td>
-        <td style="font-size:12px;color:var(--muted)">${h.motivo||''}</td>
+        <td style="font-size:12px;color:var(--farinha-fosca)">${h.motivo||''}</td>
       </tr>`).join('');
   }catch(e){ toast('Erro ao carregar histórico: '+e.message); }
 }
